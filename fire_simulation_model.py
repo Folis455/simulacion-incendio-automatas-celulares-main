@@ -3,7 +3,7 @@ import math
 
 # Estados de la celda
 EMPTY = 0
-TREE = 1
+GRASS = 1
 BURNING = 2
 BURNT = 3
 
@@ -12,15 +12,15 @@ DEFAULT_GRID_SIZE = (100, 100)
 
 # Probabilidades base y factores de influencia (para get_transition_matrix)
 # EMPTY state transitions
-P_E_T_BASE = 0.00000  # Probabilidad base EMPTY -> TREE (REDUCIDO DRÁSTICAMENTE de 0.02)
-F_E_T_NEIGHBOR = 0.00  # Factor de influencia de vecinos TREE para EMPTY -> TREE 
-P_E_T_MAX_INFLUENCE = 0.00  # Máxima probabilidad adicional por influencia para EMPTY -> TREE (REDUCIDO de 0.3)
+P_E_G_BASE = 0.00000  # Probabilidad base EMPTY -> GRASS (REDUCIDO DRÁSTICAMENTE de 0.02)
+F_E_G_NEIGHBOR = 0.00  # Factor de influencia de vecinos GRASS para EMPTY -> GRASS 
+P_E_G_MAX_INFLUENCE = 0.00  # Máxima probabilidad adicional por influencia para EMPTY -> GRASS (REDUCIDO de 0.3)
 
-# TREE state transitions
-P_T_B_BASE = 0.00000  # Probabilidad base TREE -> BURNING (REDUCIDO DRÁSTICAMENTE de 0.05)
-F_T_B_NEIGHBOR = 0.15  # Factor de propagación por vecinos BURNING para TREE -> BURNING
-F_T_B_WIND = 0.35  # Factor de escala para la influencia del viento en TREE -> BURNING (AUMENTADO de 0.1)
-P_T_B_MAX = 0.95  # Máxima probabilidad para TREE -> BURNING
+# GRASS state transitions
+P_G_B_BASE = 0.00000  # Probabilidad base GRASS -> BURNING (REDUCIDO DRÁSTICAMENTE de 0.05)
+F_G_B_NEIGHBOR = 0.15  # Factor de propagación por vecinos BURNING para GRASS -> BURNING
+F_G_B_WIND = 0.35  # Factor de escala para la influencia del viento en GRASS -> BURNING (AUMENTADO de 0.1)
+P_G_B_MAX = 0.95  # Máxima probabilidad para GRASS -> BURNING
 
 # BURNING state transitions
 P_B_B = 0.80  # Probabilidad BURNING -> BURNING (permanecer quemándose) (AUMENTADO de 0.10)
@@ -28,10 +28,10 @@ P_B_X = 0.20  # Probabilidad BURNING -> BURNT (X para quemado) (REDUCIDO de 0.90
 
 # BURNT state transitions
 P_X_E_BASE = 0.00000  # Probabilidad base BURNT -> EMPTY (regeneración) (REDUCIDO DRÁSTICAMENTE de 0.05)
-F_X_E_NEIGHBOR = 0.00  # Factor de influencia de vecinos TREE para BURNT -> EMPTY (semillas)
+F_X_E_NEIGHBOR = 0.00  # Factor de influencia de vecinos GRASS para BURNT -> EMPTY (semillas)
 P_X_E_MAX_INFLUENCE = 0.0  # Máxima probabilidad adicional por influencia para BURNT -> EMPTY
 
-# Factores de influencia para variables climáticas (TREE -> BURNING)
+# Factores de influencia para variables climáticas (GRASS -> BURNING)
 TEMP_BASELINE_C = 20.0      # Temperatura base para cálculo de efecto
 TEMP_SENSITIVITY = 0.005    # Aumento de probabilidad de ignición por °C sobre el baseline
 SOIL_MOISTURE_SENSITIVITY = 0.7 # Factor de reducción por humedad del suelo (0 a 1, 1 es reducción total)
@@ -63,7 +63,7 @@ class FireSimulationModel:
             grid_size (tuple): Tamaño de la cuadrícula (filas, columnas)
         """
         self.grid_size = grid_size
-        self.forest = np.random.choice([EMPTY, TREE], size=grid_size, p=[0.1, 0.9])
+        self.forest = np.random.choice([EMPTY, GRASS], size=grid_size, p=[0.1, 0.9])
         self.dryness_grid = np.full(grid_size, 50.0, dtype=float)
         self.water_grid = np.zeros(grid_size, dtype=np.uint8)
         
@@ -121,11 +121,11 @@ class FireSimulationModel:
             np.array: Vector de probabilidades de transición para el estado actual.
         """
         # Matriz de transición base con valores por defecto
-        # Filas: EMPTY, TREE, BURNING, BURNT
-        # Columnas: [EMPTY, TREE, BURNING, BURNT]
+        # Filas: EMPTY, GRASS, BURNING, BURNT
+        # Columnas: [EMPTY, GRASS, BURNING, BURNT]
         base_transitions = np.array([
-            [1.0 - P_E_T_BASE, P_E_T_BASE, 0.00, 0.00],  # EMPTY
-            [0.00, 1.0 - P_T_B_BASE, P_T_B_BASE, 0.00],  # TREE
+            [1.0 - P_E_G_BASE, P_E_G_BASE, 0.00, 0.00],  # EMPTY
+            [0.00, 1.0 - P_G_B_BASE, P_G_B_BASE, 0.00],  # GRASS
             [0.00, 0.00, P_B_B, P_B_X],                 # BURNING
             [P_X_E_BASE, 0.00, 0.00, 1.0 - P_X_E_BASE]  # BURNT
         ])
@@ -133,16 +133,16 @@ class FireSimulationModel:
         probs = base_transitions[current_state].copy()
         
         burning_neighbors_count = neighborhood_states.count(BURNING)
-        tree_neighbors_count = neighborhood_states.count(TREE)
+        grass_neighbors_count = neighborhood_states.count(GRASS)
         
         # 1. Transiciones desde EMPTY
         if current_state == EMPTY:
-            tree_influence = min(F_E_T_NEIGHBOR * tree_neighbors_count, P_E_T_MAX_INFLUENCE)
-            probs[TREE] = P_E_T_BASE + tree_influence
-            probs[EMPTY] = 1.0 - probs[TREE]  # Normalizar
+            grass_influence = min(F_E_G_NEIGHBOR * grass_neighbors_count, P_E_G_MAX_INFLUENCE)
+            probs[GRASS] = P_E_G_BASE + grass_influence
+            probs[EMPTY] = 1.0 - probs[GRASS]  # Normalizar
         
-        # 2. Transiciones desde TREE
-        elif current_state == TREE:
+        # 2. Transiciones desde GRASS
+        elif current_state == GRASS:
             total_wind_factor = 0.0
             if burning_neighbors_count > 0:  # El viento solo importa si hay vecinos quemándose
                 wind_y_comp, wind_x_comp = wind_dir[0], wind_dir[1]
@@ -172,20 +172,20 @@ class FireSimulationModel:
             soil_moisture_reduction_factor = max(0.0, soil_moisture_reduction_factor)
             
             # Probabilidad de quemarse con efecto de sequedad local
-            ignition_prob_from_neighbors = F_T_B_NEIGHBOR * burning_neighbors_count
-            ignition_prob_from_wind = total_wind_factor * wind_int * F_T_B_WIND
+            ignition_prob_from_neighbors = F_G_B_NEIGHBOR * burning_neighbors_count
+            ignition_prob_from_wind = total_wind_factor * wind_int * F_G_B_WIND
             
             dryness_scale = 1.0 + (max(0.0, min(100.0, float(local_dryness_0_to_100))) / 100.0) * DRYNESS_SPREAD_MULTIPLIER
             effective_spread_prob = (ignition_prob_from_neighbors + ignition_prob_from_wind + temp_effect_on_spread) \
                                     * humidity_reduction_factor * soil_moisture_reduction_factor * dryness_scale
             
-            final_burning_prob = P_T_B_BASE + effective_spread_prob
-            final_burning_prob = min(max(final_burning_prob, 0.0), P_T_B_MAX)
+            final_burning_prob = P_G_B_BASE + effective_spread_prob
+            final_burning_prob = min(max(final_burning_prob, 0.0), P_G_B_MAX)
 
             probs[BURNING] = final_burning_prob
-            probs[TREE] = 1.0 - final_burning_prob
-            if probs[TREE] < 0: 
-                probs[TREE] = 0
+            probs[GRASS] = 1.0 - final_burning_prob
+            if probs[GRASS] < 0: 
+                probs[GRASS] = 0
             probs[EMPTY] = 0
 
         # 3. Transiciones desde BURNING (ya definidas en base_transitions)
@@ -194,7 +194,7 @@ class FireSimulationModel:
             
         # 4. Transiciones desde BURNT
         elif current_state == BURNT:
-            regen_influence = min(F_X_E_NEIGHBOR * tree_neighbors_count, P_X_E_MAX_INFLUENCE)
+            regen_influence = min(F_X_E_NEIGHBOR * grass_neighbors_count, P_X_E_MAX_INFLUENCE)
             probs[EMPTY] = P_X_E_BASE + regen_influence
             probs[BURNT] = 1.0 - probs[EMPTY]
 
@@ -203,7 +203,7 @@ class FireSimulationModel:
         probs_sum = np.sum(probs)
         if probs_sum == 0:
             if current_state == EMPTY: probs[EMPTY] = 1.0
-            elif current_state == TREE: probs[TREE] = 1.0
+            elif current_state == GRASS: probs[GRASS] = 1.0
             elif current_state == BURNING: probs[BURNING] = 1.0
             elif current_state == BURNT: probs[BURNT] = 1.0
         else:
@@ -257,7 +257,7 @@ class FireSimulationModel:
                 if self.water_grid[r, c] > 0:
                     new_grid[r, c] = EMPTY
                 else:
-                    new_grid[r, c] = np.random.choice([EMPTY, TREE, BURNING, BURNT], p=transition_probs)
+                    new_grid[r, c] = np.random.choice([EMPTY, GRASS, BURNING, BURNT], p=transition_probs)
         
         self.forest = new_grid
         return new_grid
@@ -271,20 +271,20 @@ class FireSimulationModel:
         """
         total_cells = self.forest.size
         empty_count = np.sum(self.forest == EMPTY)
-        tree_count = np.sum(self.forest == TREE)
+        grass_count = np.sum(self.forest == GRASS)
         burning_count = np.sum(self.forest == BURNING)
         burnt_count = np.sum(self.forest == BURNT)
         
         return {
             'empty': empty_count / total_cells * 100,
-            'tree': tree_count / total_cells * 100,
+            'grass': grass_count / total_cells * 100,
             'burning': burning_count / total_cells * 100,
             'burnt': burnt_count / total_cells * 100
         }
 
     def reset_forest(self):
         """Reinicia el bosque a su estado inicial."""
-        self.forest = np.random.choice([EMPTY, TREE], size=self.grid_size, p=[0.1, 0.9])
+        self.forest = np.random.choice([EMPTY, GRASS], size=self.grid_size, p=[0.1, 0.9])
         self.dryness_grid = np.full(self.grid_size, 50.0, dtype=float)
         self.water_grid = np.zeros(self.grid_size, dtype=np.uint8)
 
@@ -319,7 +319,7 @@ class FireSimulationModel:
             r_center (int): Fila central del pincel
             c_center (int): Columna central del pincel
             brush_size (int): Tamaño del pincel en celdas
-            brush_type (str): Tipo de pincel ('fire', 'tree', 'empty', 'water', 'dryness')
+            brush_type (str): Tipo de pincel ('fire', 'grass', 'empty', 'water', 'dryness')
             value (float): Valor para el pincel de sequedad [0-100]
         """
         half = brush_size // 2
@@ -330,8 +330,8 @@ class FireSimulationModel:
         
         if brush_type == 'fire':
             self.forest[r_start:r_end, c_start:c_end] = BURNING
-        elif brush_type == 'tree':
-            self.forest[r_start:r_end, c_start:c_end] = TREE
+        elif brush_type == 'grass':
+            self.forest[r_start:r_end, c_start:c_end] = GRASS
         elif brush_type == 'empty':
             self.forest[r_start:r_end, c_start:c_end] = EMPTY
         elif brush_type == 'water':

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
-from fire_simulation_model import FireSimulationModel, EMPTY, TREE, BURNING, BURNT
+from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
 
 class FireSimulationGUI:
     """
@@ -32,7 +32,7 @@ class FireSimulationGUI:
         # Variables de pincel
         self.brush_size_cells = 1
         self.brush_dryness_value = 50
-        self.painting_mode = 'fire'  # 'fire', 'dryness', 'water', 'tree', 'empty'
+        self.painting_mode = 'fire'  # 'fire', 'dryness', 'water', 'grass', 'empty'
         self.show_water_overlay = False
         
         # Variables de interacción
@@ -62,7 +62,7 @@ class FireSimulationGUI:
         # Panel de estadísticas
         colors = ["white", "green", "red", "black"]
         self.line_empty, = self.ax2.plot([], [], color='lightgray', linestyle='-', label='Vacío (%)')
-        self.line_tree, = self.ax2.plot([], [], color=colors[TREE], linestyle='-', label='Árbol (%)')
+        self.line_grass, = self.ax2.plot([], [], color=colors[GRASS], linestyle='-', label='Pasto (%)')
         self.line_burning, = self.ax2.plot([], [], color=colors[BURNING], linestyle='-', label='Quemando (%)')
         self.line_burnt, = self.ax2.plot([], [], color=colors[BURNT], linestyle='-', label='Quemado (%)')
         
@@ -162,7 +162,7 @@ class FireSimulationGUI:
 
         # Máscaras por estado
         mask_empty = (self.model.forest == EMPTY)
-        mask_tree = (self.model.forest == TREE)
+        mask_grass = (self.model.forest == GRASS)
         mask_burning = (self.model.forest == BURNING)
         mask_burnt = (self.model.forest == BURNT)
 
@@ -171,13 +171,13 @@ class FireSimulationGUI:
         img[mask_burning] = color_red
         img[mask_burnt] = color_black
 
-        # Árboles con degradado según sequedad (0 -> verde, 100 -> amarillo)
+        # Pasto con degradado según sequedad (0 -> verde, 100 -> amarillo)
         dryness_norm = np.clip(self.model.dryness_grid / 100.0, 0.0, 1.0)
-        tree_idx = np.where(mask_tree)
-        if tree_idx[0].size > 0:
-            w_yellow = np.power(dryness_norm[tree_idx], 1.5)
+        grass_idx = np.where(mask_grass)
+        if grass_idx[0].size > 0:
+            w_yellow = np.power(dryness_norm[grass_idx], 1.5)
             w_green = 1.0 - w_yellow
-            img[tree_idx] = (w_green[:, None] * color_green) + (w_yellow[:, None] * color_yellow)
+            img[grass_idx] = (w_green[:, None] * color_green) + (w_yellow[:, None] * color_yellow)
 
         # Celdas de agua: azules con overlay opcional
         if np.any(self.model.water_grid):
@@ -263,7 +263,7 @@ class FireSimulationGUI:
         """Maneja eventos de teclado."""
         if event.key == 'm':
             # Rotar modo de pincel
-            modes = ['fire', 'dryness', 'water', 'tree', 'empty']
+            modes = ['fire', 'dryness', 'water', 'grass', 'empty']
             current_idx = modes.index(self.painting_mode)
             self.painting_mode = modes[(current_idx + 1) % len(modes)]
             self.update_brush_text()
@@ -391,12 +391,12 @@ class FireSimulationGUI:
         self.stats_history = []
         x_data = []
         empty_data = []
-        tree_data = []
+        grass_data = []
         burning_data = []
         burnt_data = []
         
         self.line_empty.set_data(x_data, empty_data)
-        self.line_tree.set_data(x_data, tree_data)
+        self.line_grass.set_data(x_data, grass_data)
         self.line_burning.set_data(x_data, burning_data)
         self.line_burnt.set_data(x_data, burnt_data)
         self.ax2.set_xlim(0, self.simulation_steps)
@@ -411,7 +411,7 @@ class FireSimulationGUI:
     def _update_animation(self, frame):
         """Actualiza la animación en cada frame."""
         if not self.simulation_started or self.simulation_paused:
-            return [self.im, self.line_empty, self.line_tree, self.line_burning, self.line_burnt]
+            return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
         # Ejecutar múltiples pasos según la velocidad
         for _ in range(self.simulation_speed_multiplier):
@@ -424,14 +424,14 @@ class FireSimulationGUI:
         # Actualizar gráfico de estadísticas
         x_data = list(range(len(self.stats_history)))
         self.line_empty.set_data(x_data, [s['empty'] for s in self.stats_history])
-        self.line_tree.set_data(x_data, [s['tree'] for s in self.stats_history])
+        self.line_grass.set_data(x_data, [s['grass'] for s in self.stats_history])
         self.line_burning.set_data(x_data, [s['burning'] for s in self.stats_history])
         self.line_burnt.set_data(x_data, [s['burnt'] for s in self.stats_history])
         
         if x_data:
             self.ax2.set_xlim(0, max(self.simulation_steps * self.simulation_speed_multiplier, len(x_data)) + 1)
 
-        return [self.im, self.line_empty, self.line_tree, self.line_burning, self.line_burnt]
+        return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
     
     def show(self):
         """Muestra la interfaz gráfica."""
