@@ -320,6 +320,11 @@ class FireSimulationGUI:
     
     def _update_speed(self, val):
         self.simulation_speed_multiplier = int(val)
+        # Actualizar interval de animación si está corriendo
+        if self.simulation_started and not self.simulation_paused and self.ani:
+            base_interval = 100
+            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
+            self.ani.event_source.interval = dynamic_interval
     
     def _update_brush_size(self, val):
         self.brush_size_cells = int(val)
@@ -347,8 +352,11 @@ class FireSimulationGUI:
                 self.im.set_array(self._build_display_image())
             
             self.stats_history = []
+            # Calcular interval dinámico basado en velocidad para verdadero fast-forward
+            base_interval = 100  # 100ms base
+            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
             self.ani = animation.FuncAnimation(self.fig, self._update_animation, 
-                                             frames=self.simulation_steps, interval=100, blit=False)
+                                             frames=self.simulation_steps, interval=dynamic_interval, blit=False)
             self.fig.canvas.draw_idle()
             
         elif self.simulation_started and not self.simulation_paused:
@@ -413,11 +421,10 @@ class FireSimulationGUI:
         if not self.simulation_started or self.simulation_paused:
             return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
-        # Ejecutar múltiples pasos según la velocidad
-        for _ in range(self.simulation_speed_multiplier):
-            self.model.update_step()
-            current_stats = self.model.compute_statistics()
-            self.stats_history.append(current_stats)
+        # Ejecutar UN solo paso por frame (velocidad controlada por interval)
+        self.model.update_step()
+        current_stats = self.model.compute_statistics()
+        self.stats_history.append(current_stats)
         
         self.im.set_array(self._build_display_image())
         
@@ -429,7 +436,8 @@ class FireSimulationGUI:
         self.line_burnt.set_data(x_data, [s['burnt'] for s in self.stats_history])
         
         if x_data:
-            self.ax2.set_xlim(0, max(self.simulation_steps * self.simulation_speed_multiplier, len(x_data)) + 1)
+            # Ajustar rango del gráfico basado en pasos reales ejecutados
+            self.ax2.set_xlim(0, max(self.simulation_steps, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
     
