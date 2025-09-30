@@ -21,6 +21,7 @@ class FireSimulationGUI:
         self.grid_size = grid_size
         self.simulation_steps = simulation_steps
         self.model = FireSimulationModel(grid_size)
+        self.grass_density = self.model.grass_density
         
         # Variables de control de simulación
         self.simulation_started = False
@@ -87,8 +88,9 @@ class FireSimulationGUI:
         ax_temperature = plt.axes([0.15, 0.20, 0.7, 0.025])
         ax_soil_moisture = plt.axes([0.15, 0.15, 0.7, 0.025])
         ax_speed = plt.axes([0.15, 0.10, 0.7, 0.025])
-        ax_brush_size = plt.axes([0.15, 0.075, 0.32, 0.025])
-        ax_brush_dryness = plt.axes([0.53, 0.075, 0.32, 0.025])
+        ax_brush_size = plt.axes([0.15, 0.075, 0.22, 0.025])
+        ax_brush_dryness = plt.axes([0.39, 0.075, 0.22, 0.025])
+        ax_grass_density = plt.axes([0.63, 0.075, 0.22, 0.025])
         
         # Crear sliders
         self.slider_wind_x = Slider(ax_wind_x, 'Viento X', -10.0, 10.0, 
@@ -109,6 +111,8 @@ class FireSimulationGUI:
                                        valinit=self.brush_size_cells, valstep=1)
         self.slider_brush_dryness = Slider(ax_brush_dryness, 'Sequedad [0-100]', 0, 100, 
                                           valinit=self.brush_dryness_value, valstep=1)
+        self.slider_grass_density = Slider(ax_grass_density, 'Densidad Pasto', 0.0, 1.0,
+                                           valinit=self.grass_density, valstep=0.05)
         
         # Conectar sliders a funciones de actualización
         self.slider_wind_x.on_changed(self._update_wind_x)
@@ -120,6 +124,7 @@ class FireSimulationGUI:
         self.slider_speed.on_changed(self._update_speed)
         self.slider_brush_size.on_changed(self._update_brush_size)
         self.slider_brush_dryness.on_changed(self._update_brush_dryness)
+        self.slider_grass_density.on_changed(self._update_grass_density)
         
         # Botones de control
         button_color = 'lightgoldenrodyellow'
@@ -320,11 +325,6 @@ class FireSimulationGUI:
     
     def _update_speed(self, val):
         self.simulation_speed_multiplier = int(val)
-        # Actualizar interval de animación si está corriendo
-        if self.simulation_started and not self.simulation_paused and self.ani:
-            base_interval = 100
-            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
-            self.ani.event_source.interval = dynamic_interval
     
     def _update_brush_size(self, val):
         self.brush_size_cells = int(val)
@@ -333,6 +333,10 @@ class FireSimulationGUI:
     def _update_brush_dryness(self, val):
         self.brush_dryness_value = int(val)
         self.update_brush_text()
+
+    def _update_grass_density(self, val):
+        self.grass_density = float(val)
+        self.model.grass_density = self.grass_density
     
     def _main_button_callback(self, event):
         """Maneja el botón principal (Iniciar/Pausar/Reanudar)."""
@@ -352,11 +356,8 @@ class FireSimulationGUI:
                 self.im.set_array(self._build_display_image())
             
             self.stats_history = []
-            # Calcular interval dinámico basado en velocidad para verdadero fast-forward
-            base_interval = 100  # 100ms base
-            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
             self.ani = animation.FuncAnimation(self.fig, self._update_animation, 
-                                             frames=self.simulation_steps, interval=dynamic_interval, blit=False)
+                                             frames=self.simulation_steps, interval=100, blit=False)
             self.fig.canvas.draw_idle()
             
         elif self.simulation_started and not self.simulation_paused:
@@ -421,10 +422,11 @@ class FireSimulationGUI:
         if not self.simulation_started or self.simulation_paused:
             return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
-        # Ejecutar UN solo paso por frame (velocidad controlada por interval)
-        self.model.update_step()
-        current_stats = self.model.compute_statistics()
-        self.stats_history.append(current_stats)
+        # Ejecutar múltiples pasos según la velocidad
+        for _ in range(self.simulation_speed_multiplier):
+            self.model.update_step()
+            current_stats = self.model.compute_statistics()
+            self.stats_history.append(current_stats)
         
         self.im.set_array(self._build_display_image())
         
@@ -436,8 +438,7 @@ class FireSimulationGUI:
         self.line_burnt.set_data(x_data, [s['burnt'] for s in self.stats_history])
         
         if x_data:
-            # Ajustar rango del gráfico basado en pasos reales ejecutados
-            self.ax2.set_xlim(0, max(self.simulation_steps, len(x_data)) + 1)
+            self.ax2.set_xlim(0, max(self.simulation_steps * self.simulation_speed_multiplier, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
     

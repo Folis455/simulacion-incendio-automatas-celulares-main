@@ -22,9 +22,9 @@ F_G_B_NEIGHBOR = 0.15  # Factor de propagación por vecinos BURNING para GRASS -
 F_G_B_WIND = 0.35  # Factor de escala para la influencia del viento en GRASS -> BURNING (AUMENTADO de 0.1)
 P_G_B_MAX = 0.95  # Máxima probabilidad para GRASS -> BURNING
 
-# BURNING state transitions
-P_B_B = 0.80  # Probabilidad BURNING -> BURNING (permanecer quemándose) (AUMENTADO de 0.10)
-P_B_X = 0.20  # Probabilidad BURNING -> BURNT (X para quemado) (REDUCIDO de 0.90)
+# BURNING state transitions (P_B_X será ajustado dinámicamente por densidad)
+P_B_B = 0.80  # Probabilidad base BURNING -> BURNING (no usada directamente si se recalcula)
+P_B_X = 0.20  # Probabilidad base BURNING -> BURNT (se reemplaza con densidad)
 
 # BURNT state transitions
 P_X_E_BASE = 0.00000  # Probabilidad base BURNT -> EMPTY (regeneración) (REDUCIDO DRÁSTICAMENTE de 0.05)
@@ -55,7 +55,7 @@ class FireSimulationModel:
     Modelo de simulación de incendios forestales basado en autómatas celulares estocásticos.
     """
     
-    def __init__(self, grid_size=DEFAULT_GRID_SIZE):
+    def __init__(self, grid_size=DEFAULT_GRID_SIZE, grass_density=0.375):
         """
         Inicializa el modelo de simulación.
         
@@ -73,6 +73,10 @@ class FireSimulationModel:
         self.wind_direction = [-10, 5]  # [componente_y, componente_x]
         self.wind_intensity = 0.9
         self.humidity = 0.3
+        
+        # Densidad de pasto [0-1]; mayor densidad = tarda más en consumirse
+        # Mapea a duración esperada de quema entre 2 y 10 pasos
+        self.grass_density = float(min(max(grass_density, 0.0), 1.0))
     
     def get_neighborhood(self, grid, r, c):
         """
@@ -126,8 +130,8 @@ class FireSimulationModel:
         base_transitions = np.array([
             [1.0 - P_E_G_BASE, P_E_G_BASE, 0.00, 0.00],  # EMPTY
             [0.00, 1.0 - P_G_B_BASE, P_G_B_BASE, 0.00],  # GRASS
-            [0.00, 0.00, P_B_B, P_B_X],                 # BURNING
-            [P_X_E_BASE, 0.00, 0.00, 1.0 - P_X_E_BASE]  # BURNT
+            [0.00, 0.00, P_B_B, P_B_X],                  # BURNING
+            [P_X_E_BASE, 0.00, 0.00, 1.0 - P_X_E_BASE]   # BURNT
         ])
         
         probs = base_transitions[current_state].copy()
@@ -188,9 +192,14 @@ class FireSimulationModel:
                 probs[GRASS] = 0
             probs[EMPTY] = 0
 
-        # 3. Transiciones desde BURNING (ya definidas en base_transitions)
+        # 3. Transiciones desde BURNING (ajuste dinámico por densidad)
         elif current_state == BURNING:
-            pass
+            # Duración esperada E en [2,10]; mayor densidad => mayor duración
+            expected_burn_steps = 2.0 + (self.grass_density) * (10.0 - 2.0)
+            p_burn_to_burnt = 1.0 / max(2.0, expected_burn_steps)
+            p_burning_to_burning = max(0.0, 1.0 - p_burn_to_burnt)
+            probs[BURNING] = p_burning_to_burning
+            probs[BURNT] = p_burn_to_burnt
             
         # 4. Transiciones desde BURNT
         elif current_state == BURNT:

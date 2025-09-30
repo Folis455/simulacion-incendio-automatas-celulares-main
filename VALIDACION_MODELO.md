@@ -74,4 +74,3 @@ Notas:
 ## Registro para reproducibilidad
 - Por intervalo: viento (dir/intensidad), temperatura, humedad aire/suelo, lluvia
 - Ajustes manuales (pincel, agua añadida) y multiplicadores de sequedad
-- Semilla aleatoria y versión de código
