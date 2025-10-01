@@ -19,11 +19,6 @@ DEFAULT_HUMIDITY = 0.3  # Humedad ambiente
 DEFAULT_GRASS_DENSITY = 0.375  # Humedad ambiente
 
 # Probabilidades base y factores de influencia (para get_transition_matrix)
-# EMPTY state transitions
-P_E_G_BASE = 0.00000  # Probabilidad base EMPTY -> GRASS (REDUCIDO DRÁSTICAMENTE de 0.02)
-F_E_G_NEIGHBOR = 0.00  # Factor de influencia de vecinos GRASS para EMPTY -> GRASS
-P_E_G_MAX_INFLUENCE = 0.00  # Máxima probabilidad adicional por influencia para EMPTY -> GRASS (REDUCIDO de 0.3)
-
 # GRASS state transitions
 P_G_B_BASE = 0.00000  # Probabilidad base GRASS -> BURNING (REDUCIDO DRÁSTICAMENTE de 0.05)
 F_G_B_NEIGHBOR = 0.15  # Factor de propagación por vecinos BURNING para GRASS -> BURNING
@@ -34,19 +29,14 @@ P_G_B_MAX = 0.95  # Máxima probabilidad para GRASS -> BURNING
 P_B_B = 0.80  # Probabilidad BURNING -> BURNING (permanecer quemándose) (AUMENTADO de 0.10)
 P_B_X = 0.20  # Probabilidad BURNING -> BURNT (X para quemado) (REDUCIDO de 0.90)
 
-# BURNT state transitions
-P_X_E_BASE = 0.00000  # Probabilidad base BURNT -> EMPTY (regeneración) (REDUCIDO DRÁSTICAMENTE de 0.05)
-F_X_E_NEIGHBOR = 0.00  # Factor de influencia de vecinos GRASS para BURNT -> EMPTY (semillas)
-P_X_E_MAX_INFLUENCE = 0.0  # Máxima probabilidad adicional por influencia para BURNT -> EMPTY
-
 # Matriz de transición base con valores por defecto
 # Filas: EMPTY, GRASS, BURNING, BURNT
 # Columnas: [EMPTY, GRASS, BURNING, BURNT]
 BASE_TRANSITIONS = np.array([
-    [1.0 - P_E_G_BASE, P_E_G_BASE, 0.00, 0.00],  # EMPTY
+    [1.0, 0.00, 0.00, 0.00],  # EMPTY
     [0.00, 1.0 - P_G_B_BASE, P_G_B_BASE, 0.00],  # GRASS
     [0.00, 0.00, P_B_B, P_B_X],  # BURNING
-    [P_X_E_BASE, 0.00, 0.00, 1.0 - P_X_E_BASE]  # BURNT
+    [0.00, 0.00, 0.00, 1.0]  # BURNT
 ])
 
 # Factores de influencia para variables climáticas (GRASS -> BURNING)
