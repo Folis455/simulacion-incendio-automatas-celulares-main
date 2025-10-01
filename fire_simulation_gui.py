@@ -4,7 +4,8 @@ import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
 from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
-from GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
+from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
+from config.model_config import DEFAULT_GRID_SIZE
 
 
 class FireSimulationGUI:
@@ -12,17 +13,16 @@ class FireSimulationGUI:
     Interfaz gráfica para la simulación de incendios de pastizales.
     """
 
-    def __init__(self, grid_size=(100, 100), simulation_steps=50):
+    def __init__(self, simulation_steps=50):
         """
         Inicializa la interfaz gráfica.
         
         Args:
-            grid_size (tuple): Tamaño de la cuadrícula
             simulation_steps (int): Número de pasos de simulación
         """
-        self.grid_size = grid_size
+        self.grid_size = DEFAULT_GRID_SIZE
         self.simulation_steps = simulation_steps
-        self.model = FireSimulationModel(grid_size)
+        self.model = FireSimulationModel()
         self.grass_density = self.model.grass_density
 
         # Variables de control de simulación
@@ -93,7 +93,7 @@ class FireSimulationGUI:
         ax_brush_size = plt.axes([0.15, 0.075, 0.22, 0.025])
         ax_brush_dryness = plt.axes([0.39, 0.075, 0.22, 0.025])
         ax_grass_density = plt.axes([0.63, 0.075, 0.22, 0.025])
-        
+
         # Crear sliders
         self.slider_wind_x = Slider(
             ax_wind_x, label='Viento X',
@@ -140,9 +140,11 @@ class FireSimulationGUI:
             valmin=SLIDER_LIMITS["brush_dryness"][0], valmax=SLIDER_LIMITS["brush_dryness"][1],
             valinit=self.brush_dryness_value, valstep=SLIDER_LIMITS["brush_dryness"][2]
         )
-
-        self.slider_grass_density = Slider(ax_grass_density, 'Densidad Pasto', 0.0, 1.0,
-                                           valinit=self.grass_density, valstep=0.05) #TODO: FIX
+        self.slider_grass_density = Slider(
+            ax_grass_density, label='Densidad Pasto',
+            valmin=SLIDER_LIMITS["grass_density"][0], valmax=SLIDER_LIMITS["grass_density"][1],
+            valinit=self.grass_density, valstep=SLIDER_LIMITS["grass_density"][2]
+        )
 
         # Conectar sliders a funciones de actualización
         self.slider_wind_x.on_changed(self._update_wind_x)
@@ -432,7 +434,7 @@ class FireSimulationGUI:
         self.simulation_started = False
         self.simulation_paused = False
 
-        self.model.reset_land()
+        self.model = FireSimulationModel()
         self.im.set_array(self._build_display_image())
 
         self.stats_history = []
@@ -466,7 +468,7 @@ class FireSimulationGUI:
         self.stats_history.append(current_stats)
 
         self.im.set_array(self._build_display_image())
-        
+
         # Actualizar gráfico de estadísticas
         x_data = list(range(len(self.stats_history)))
         self.line_empty.set_data(x_data, [s['empty'] for s in self.stats_history])

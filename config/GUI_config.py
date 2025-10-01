@@ -17,6 +17,7 @@ SLIDER_LIMITS = {
     "speed": (1, 10, 1),
     "brush_size": (1, 25, 1),
     "brush_dryness": (0, 100, 1),
+    "grass_density": (0, 100, 0.05),
 }
 
 COLORS = {

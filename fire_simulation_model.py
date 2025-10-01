@@ -1,10 +1,9 @@
 import numpy as np
 import math
-from model_config import (
+from config.model_config import (
     EMPTY, GRASS, BURNING, BURNT,
     DEFAULT_GRID_SIZE, DEFAULT_EMPTY_PROB, DEFAULT_GRASS_PROB, DEFAULT_GRASS_DRYNESS, DEFAULT_TEMPERATURE, DEFAULT_SOIL_MOISTURE,
     DEFAULT_WIND_DIRECTION, DEFAULT_WIND_INTENSITY, DEFAULT_HUMIDITY,
-    P_E_G_BASE, F_E_G_NEIGHBOR, P_E_G_MAX_INFLUENCE,
     P_G_B_BASE, F_G_B_NEIGHBOR, F_G_B_WIND, P_G_B_MAX,
     TEMPERATURE_BASELINE, TEMPERATURE_SENSITIVITY, SOIL_MOISTURE_SENSITIVITY,
     DRYNESS_SPREAD_MULTIPLIER, WATER_EFFECT_RADIUS, WATER_SOIL_MOISTURE_BONUS,
@@ -17,18 +16,14 @@ class FireSimulationModel:
     Modelo de simulación de incendios en pastizales basado en autómatas celulares estocásticos.
     """
 
-    def __init__(self, grid_size: tuple[int, int] = DEFAULT_GRID_SIZE) -> None:
+    def __init__(self) -> None:
         """
         Inicializa el modelo de simulación.
-        
-        Args:
-            grid_size (tuple): Tamaño de la cuadrícula (filas, columnas)
         """
-        self.grid_size = grid_size
-        self.land = None
-        self.dryness_grid = None
-        self.water_grid = None
-        self.reset_land()
+        self.grid_size = DEFAULT_GRID_SIZE
+        self.land = np.random.choice([EMPTY, GRASS], size=self.grid_size, p=[DEFAULT_EMPTY_PROB, DEFAULT_GRASS_PROB])
+        self.dryness_grid = np.full(self.grid_size, DEFAULT_GRASS_DRYNESS, dtype=float)
+        self.water_grid = np.zeros(self.grid_size, dtype=np.uint8)
 
         # Variables climáticas por defecto
         self.temperature = DEFAULT_TEMPERATURE
@@ -38,13 +33,12 @@ class FireSimulationModel:
         self.humidity = DEFAULT_HUMIDITY
         self.grass_density = float(min(max(DEFAULT_GRASS_DENSITY, 0.0), 1.0))
 
-    def get_neighborhood(self, grid: np.ndarray, r: int, c: int) -> list[int]:
+    def get_neighborhood(self, r: int, c: int) -> list[int]:
         """
         Obtiene los estados de las 8 celdas vecinas (vecindad de Moore).
         Si un vecino está fuera de la cuadrícula, se considera EMPTY.
 
         Args:
-            grid (np.array): La cuadrícula actual del terreno.
             r (int): Fila de la celda central.
             c (int): Columna de la celda central.
 
@@ -59,10 +53,10 @@ class FireSimulationModel:
                     continue
                 nr, nc = r + dr, c + dc
                 # Manejo de bordes
-                if nr < 0 or nc < 0 or nr >= grid.shape[0] or nc >= grid.shape[1]:
+                if nr < 0 or nc < 0 or nr >= self.land.shape[0] or nc >= self.land.shape[1]:
                     neighbors.append(EMPTY)  # Consideramos borde como vacío
                 else:
-                    neighbors.append(grid[nr, nc])
+                    neighbors.append(self.land[nr, nc])
         return neighbors
 
     def get_transition_matrix(self, neighborhood_states: list[int], wind_direction: list[int], wind_intensity: float,
@@ -86,16 +80,9 @@ class FireSimulationModel:
         """
         probs = BASE_TRANSITIONS[current_state].copy()
         burning_neighbors_count = neighborhood_states.count(BURNING)
-        grass_neighbors_count = neighborhood_states.count(GRASS)
 
-        # 1. Transiciones desde EMPTY # TODO: volar esto
-        if current_state == EMPTY:
-            grass_influence = min(F_E_G_NEIGHBOR * grass_neighbors_count, P_E_G_MAX_INFLUENCE)
-            probs[GRASS] = P_E_G_BASE + grass_influence
-            probs[EMPTY] = 1.0 - probs[GRASS]  # Normalizar
-
-        # 2. Transiciones desde GRASS
-        elif current_state == GRASS:
+        # 1. Transiciones desde GRASS
+        if current_state == GRASS:
             total_wind_factor = 0.0
             if burning_neighbors_count > 0:  # El viento solo importa si hay vecinos quemándose
                 wind_y_comp, wind_x_comp = wind_direction[0], wind_direction[1]
@@ -136,10 +123,10 @@ class FireSimulationModel:
             probs[GRASS] = max(0.0, 1.0 - final_burning_prob)
             probs[EMPTY] = 0
 
-        # 3. Transiciones desde BURNING (ajuste dinámico por densidad)
+        # 2. Transiciones desde BURNING (ajuste dinámico por densidad)
         elif current_state == BURNING:
             # Duración esperada E en [2,10]; mayor densidad => mayor duración
-            expected_burn_steps = 2.0 + (self.grass_density) * (10.0 - 2.0)
+            expected_burn_steps = 2.0 + self.grass_density * (10.0 - 2.0)
             p_burn_to_burnt = 1.0 / max(2.0, expected_burn_steps)
             p_burning_to_burning = max(0.0, 1.0 - p_burn_to_burnt)
             probs[BURNING] = p_burning_to_burning
@@ -177,7 +164,7 @@ class FireSimulationModel:
                 # Tratamiento de agua como EMPTY
                 current_cell_state = EMPTY if self.water_grid[r, c] > 0 else self.land[r, c]
 
-                neighborhood_states = self.get_neighborhood(self.land, r, c)
+                neighborhood_states = self.get_neighborhood(r, c)
 
                 try:
                     local_dryness = float(self.dryness_grid[r, c])
@@ -229,12 +216,6 @@ class FireSimulationModel:
             'burning': burning_count / total_cells * 100,
             'burnt': burnt_count / total_cells * 100
         }
-
-    def reset_land(self) -> None:
-        """Reinicia el terreno a su estado inicial."""
-        self.land = np.random.choice([EMPTY, GRASS], size=self.grid_size, p=[DEFAULT_EMPTY_PROB, DEFAULT_GRASS_PROB])
-        self.dryness_grid = np.full(self.grid_size, DEFAULT_GRASS_DRYNESS, dtype=float)
-        self.water_grid = np.zeros(self.grid_size, dtype=np.uint8)
 
     def apply_brush(self, r_center: int, c_center: int, brush_size: int, brush_type: str, value: float | None = None) -> None:
         """
