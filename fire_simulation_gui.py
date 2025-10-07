@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
-from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
-from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
-from config.model_config import DEFAULT_GRID_SIZE
 
 
 class FireSimulationGUI:
@@ -388,10 +385,7 @@ class FireSimulationGUI:
 
             self.im.set_array(self._build_display_image())
             self.stats_history = []
-            base_interval = BASE_INTERVAL_MS
-            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
-            self.ani = animation.FuncAnimation(self.fig, self._update_animation,
-                                               frames=self.simulation_steps, interval=dynamic_interval, blit=False)
+
             interval = max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier)
             self.ani = animation.FuncAnimation(
                 self.fig, self._update_animation,
