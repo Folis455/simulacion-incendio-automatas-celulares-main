@@ -244,3 +244,15 @@ class FireSimulationModel:
             self.water_grid[r_start:r_end, c_start:c_end] = 1
         elif brush_type == 'dryness' and value is not None:
             self.dryness_grid[r_start:r_end, c_start:c_end] = float(value)
+
+    def import_state(self, data: dict) -> None:
+        self.grid_size = tuple(data["grid_size"])
+        self.land = np.array(data["land"], dtype=np.uint8)
+        self.dryness_grid = np.array(data["dryness_grid"], dtype=float)
+        self.water_grid = np.array(data["water_grid"], dtype=np.uint8)
+        self.temperature = float(data["temperature"])
+        self.soil_moisture = float(data["soil_moisture"])
+        self.wind_direction = list(data["wind_direction"])
+        self.wind_intensity = float(data["wind_intensity"])
+        self.humidity = float(data["humidity"])
+        self.grass_density = float(data["grass_density"])

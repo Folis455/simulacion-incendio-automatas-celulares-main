@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
+import tkinter as tk
+from tkinter import filedialog
 from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
 from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
 from config.model_config import DEFAULT_GRID_SIZE
@@ -171,6 +173,14 @@ class FireSimulationGUI:
 
         self.button_main.on_clicked(self._main_button_callback)
         self.button_finalize.on_clicked(self._finalize_button_callback)
+
+        ax_button_save = plt.axes([0.05, 0.02, 0.15, 0.035])
+        self.button_save = Button(ax_button_save, 'Guardar Config.')
+        self.button_save.on_clicked(self._save_button_callback)
+
+        ax_button_load = plt.axes([0.75, 0.02, 0.15, 0.035])
+        self.button_load = Button(ax_button_load, 'Cargar Config.')
+        self.button_load.on_clicked(self._load_button_callback)
 
     def _setup_event_handlers(self):
         """Configura los manejadores de eventos."""
@@ -485,3 +495,62 @@ class FireSimulationGUI:
     def show(self):
         """Muestra la interfaz gráfica."""
         plt.show()
+
+    # --------- Guardar y cargar configuración ----------
+    def _save_button_callback(self, event):
+        self.save_configs_to_file()
+
+    def _load_button_callback(self, event):
+        self.load_configs_from_file()
+
+    def save_configs_to_file(self):
+        """Guarda el estado del modelo en un archivo NPZ comprimido."""
+        root = tk.Tk()
+        root.withdraw()
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".npz",
+            filetypes=[("NumPy compressed", "*.npz")],
+            title="Guardar configuración de simulación"
+        )
+        if file_path:
+            np.savez_compressed(
+                file_path,
+                grid_size=np.array(self.model.grid_size),
+                land=self.model.land,
+                dryness_grid=self.model.dryness_grid,
+                water_grid=self.model.water_grid,
+                temperature=self.model.temperature,
+                soil_moisture=self.model.soil_moisture,
+                wind_direction=np.array(self.model.wind_direction),
+                wind_intensity=self.model.wind_intensity,
+                humidity=self.model.humidity,
+                grass_density=self.model.grass_density
+            )
+
+    def load_configs_from_file(self):
+        root = tk.Tk()
+        root.withdraw()
+        file_path = filedialog.askopenfilename(
+            filetypes=[("NumPy compressed", "*.npz")],
+            title="Cargar configuración de simulación"
+        )
+        if file_path:
+            with np.load(file_path) as data:
+                self.model.import_state(data)
+                # Actualizar sliders con los valores cargados
+                self.slider_wind_x.set_val(self.model.wind_direction[1])
+                self.slider_wind_y.set_val(self.model.wind_direction[0])
+                self.slider_intensity.set_val(self.model.wind_intensity)
+                self.slider_humidity.set_val(self.model.humidity)
+                self.slider_temperature.set_val(self.model.temperature)
+                self.slider_soil_moisture.set_val(self.model.soil_moisture)
+                self.slider_speed.set_val(self.simulation_speed_multiplier)
+                self.slider_brush_size.set_val(self.brush_size_cells)
+                self.slider_brush_dryness.set_val(self.brush_dryness_value)
+                self.slider_grass_density.set_val(self.grass_density)
+
+                # Para que se cargue el grid importado
+                if not self.simulation_started:
+                    self.simulation_started = True
+                self._update_animation(frame=0)
+                self.fig.canvas.draw_idle()
