@@ -117,7 +117,7 @@ class FireSimulationGUI:
         )
         self.slider_temperature = Slider(
             ax_temperature, label='Temperatura (°C)',
-            valmin=SLIDER_LIMITS["temperature"][0], valmax=SLIDER_LIMITS["humidity"][1],
+            valmin=SLIDER_LIMITS["temperature"][0], valmax=SLIDER_LIMITS["temperature"][1],
             valinit=self.model.temperature, valstep=SLIDER_LIMITS["temperature"][2]
         )
         self.slider_soil_moisture = Slider(
