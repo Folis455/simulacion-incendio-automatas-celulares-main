@@ -1,13 +1,13 @@
+from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
+from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
+from config.model_config import DEFAULT_GRID_SIZE
+
 import numpy as np
+from numpy.lib._stride_tricks_impl import as_strided
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
-import tkinter as tk
-from tkinter import filedialog
-from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
-from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
-from config.model_config import DEFAULT_GRID_SIZE
 
 
 class FireSimulationGUI:
@@ -18,7 +18,7 @@ class FireSimulationGUI:
     def __init__(self, simulation_steps=50):
         """
         Inicializa la interfaz gráfica.
-        
+
         Args:
             simulation_steps (int): Número de pasos de simulación
         """
@@ -163,12 +163,10 @@ class FireSimulationGUI:
         # Botones de control
         button_color = 'lightgoldenrodyellow'
         ax_button_main = plt.axes([0.25, 0.02, 0.2, 0.035])
-        self.button_main = Button(ax_button_main, 'Iniciar Simulación',
-                                  color=button_color, hovercolor='0.975')
+        self.button_main = Button(ax_button_main, 'Iniciar Simulación', color=button_color, hovercolor='0.975')
 
         ax_button_finalize = plt.axes([0.55, 0.02, 0.2, 0.035])
-        self.button_finalize = Button(ax_button_finalize, 'Finalizar Simulación',
-                                      color=button_color, hovercolor='0.975')
+        self.button_finalize = Button(ax_button_finalize, 'Finalizar Simulación', color=button_color, hovercolor='0.975')
         self.button_finalize.ax.set_visible(False)
 
         self.button_main.on_clicked(self._main_button_callback)
@@ -199,52 +197,48 @@ class FireSimulationGUI:
         h, w = self.model.land.shape
         img = np.zeros((h, w, 3), dtype=float)
 
-        # Colores base
-        color_empty = np.array(COLORS["empty"])
-        color_green = np.array(COLORS["green"])
-        color_yellow = np.array(COLORS["yellow"])
-        color_red = np.array(COLORS["red"])
-        color_blue = np.array(COLORS["blue"])
-        color_black = np.array(COLORS["black"])
+        # Colores
+        colors = {k: np.array(v) for k, v in COLORS.items()}
 
-        # Máscaras por estado
+        # Máscaras
         mask_empty = (self.model.land == EMPTY)
         mask_grass = (self.model.land == GRASS)
         mask_burning = (self.model.land == BURNING)
         mask_burnt = (self.model.land == BURNT)
 
-        # Aplicar colores base
-        img[mask_empty] = color_empty
-        img[mask_burning] = color_red
-        img[mask_burnt] = color_black
+        img[mask_empty] = colors["empty"]
+        img[mask_burning] = colors["red"]
+        img[mask_burnt] = colors["black"]
 
-        # Pasto con degradado según sequedad (0 -> verde, 100 -> amarillo)
-        dryness_norm = np.clip(self.model.dryness_grid / 100.0, 0.0, 1.0)
-        grass_idx = np.where(mask_grass)
-        if grass_idx[0].size > 0:
-            w_yellow = np.power(dryness_norm[grass_idx], 1.5)
+        # Pasto con degradado
+        if np.any(mask_grass):
+            dryness_norm = np.clip(self.model.dryness_grid / 100.0, 0.0, 1.0)
+            w_yellow = np.power(dryness_norm[mask_grass], 1.5)
             w_green = 1.0 - w_yellow
-            img[grass_idx] = (w_green[:, None] * color_green) + (w_yellow[:, None] * color_yellow)
+            img[mask_grass] = w_green[:, None] * colors["green"] + w_yellow[:, None] * colors["yellow"]
 
-        # Celdas de agua: azules con overlay opcional
-        if np.any(self.model.water_grid):
-            water_mask = (self.model.water_grid > 0)
-            img[water_mask] = color_blue
+        # Agua
+        water_mask = self.model.water_grid > 0
+        if np.any(water_mask):
+            img[water_mask] = colors["blue"]
 
             if self.show_water_overlay:
                 # Mostrar área de influencia del agua
                 from fire_simulation_model import WATER_EFFECT_RADIUS
                 pad = WATER_EFFECT_RADIUS
-                padded = np.pad(self.model.water_grid, pad_width=pad, mode='constant', constant_values=0)
-                near = np.zeros_like(self.model.water_grid, dtype=bool)
-                for dr in range(-pad, pad + 1):
-                    for dc in range(-pad, pad + 1):
-                        near |= padded[pad + dr:pad + dr + self.model.water_grid.shape[0],
-                                pad + dc:pad + dc + self.model.water_grid.shape[1]] > 0
-                overlay_mask = near & (~water_mask)
+
+                # Pad con False
+                padded = np.pad(water_mask, pad, mode='constant', constant_values=False)
+                # Crear vista as_strided
+                shape = (h, w, 2 * pad + 1, 2 * pad + 1)
+                strides = padded.strides + padded.strides
+                windows = as_strided(padded, shape=shape, strides=strides)
+                overlay_mask = np.any(windows, axis=(2, 3))
+                overlay_mask &= ~water_mask
+
                 if np.any(overlay_mask):
-                    cyan = np.array([0.6, 0.9, 1.0])
                     alpha = 0.25
+                    cyan = colors["cyan"]
                     img[overlay_mask] = (1 - alpha) * img[overlay_mask] + alpha * cyan
 
         return img
@@ -262,7 +256,6 @@ class FireSimulationGUI:
         """Maneja eventos de clic del ratón."""
         if event.inaxes != self.ax1:
             return
-
         if event.button == 1:  # Botón izquierdo
             self.is_mouse_button_down = True
             c, r = int(round(event.xdata)), int(round(event.ydata))
@@ -276,35 +269,32 @@ class FireSimulationGUI:
 
     def _on_hover(self, event):
         """Maneja eventos de movimiento del ratón."""
-        # Manejar resaltado
-        if event.inaxes == self.ax1:
-            c_hover, r_hover = int(round(event.xdata)), int(round(event.ydata))
-            if 0 <= r_hover < self.grid_size[0] and 0 <= c_hover < self.grid_size[1]:
-                if self.current_highlight_patch:
-                    self.current_highlight_patch.remove()
+        if event.inaxes != self.ax1:
+            if self.current_highlight_patch:
+                self.current_highlight_patch.remove()
+                self.current_highlight_patch = None
+            return
+
+        if self.simulation_started and not self.simulation_paused:
+            return
+
+        c_hover, r_hover = int(round(event.xdata)), int(round(event.ydata))
+        if 0 <= r_hover < self.grid_size[0] and 0 <= c_hover < self.grid_size[1]:
+            if self.current_highlight_patch:
+                self.current_highlight_patch.set_xy((c_hover - 0.5, r_hover - 0.5))
+            else:
                 self.current_highlight_patch = patches.Rectangle(
                     (c_hover - 0.5, r_hover - 0.5), 1, 1,
                     linewidth=1.5, edgecolor='yellow', facecolor='none', zorder=10
                 )
                 self.ax1.add_patch(self.current_highlight_patch)
-            else:
-                if self.current_highlight_patch:
-                    self.current_highlight_patch.remove()
-                    self.current_highlight_patch = None
+            self.fig.canvas.draw_idle()
         else:
             if self.current_highlight_patch:
                 self.current_highlight_patch.remove()
                 self.current_highlight_patch = None
-
-        # Manejar pintado mientras se arrastra
-        if self.is_mouse_button_down and event.inaxes == self.ax1:
-            c_paint, r_paint = int(round(event.xdata)), int(round(event.ydata))
-            if 0 <= r_paint < self.grid_size[0] and 0 <= c_paint < self.grid_size[1]:
-                self._apply_brush_at(r_paint, c_paint)
-
-        if (event.inaxes == self.ax1 and (self.is_mouse_button_down or self.current_highlight_patch is not None)) or \
-                (event.inaxes != self.ax1 and self.current_highlight_patch is None):
-            self.fig.canvas.draw_idle()
+        if self.is_mouse_button_down:
+            self._on_click(event)
 
     def _on_key(self, event):
         """Maneja eventos de teclado."""
@@ -346,7 +336,7 @@ class FireSimulationGUI:
 
         self.im.set_array(self._build_display_image())
 
-    # Funciones de actualización de sliders
+    # --------- Funciones de actualización de sliders ----------
     def _update_wind_x(self, val):
         self.model.wind_direction[1] = val
 
@@ -369,9 +359,8 @@ class FireSimulationGUI:
         self.simulation_speed_multiplier = int(val)
         # Actualizar interval de animación si está corriendo
         if self.simulation_started and not self.simulation_paused and self.ani:
-            base_interval = BASE_INTERVAL_MS
-            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
-            self.ani.event_source.interval = dynamic_interval
+            interval = max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier)
+            self.ani.event_source.interval = interval
 
     def _update_brush_size(self, val):
         self.brush_size_cells = int(val)
@@ -385,6 +374,7 @@ class FireSimulationGUI:
         self.grass_density = float(val)
         self.model.grass_density = self.grass_density
 
+    # --------- Botones principales ----------
     def _main_button_callback(self, event):
         """Maneja el botón principal (Iniciar/Pausar/Reanudar)."""
         if not self.simulation_started:
@@ -400,14 +390,15 @@ class FireSimulationGUI:
             if BURNING not in self.model.land:
                 center_r, center_c = self.grid_size[0] // 2, self.grid_size[1] // 2
                 self.model.apply_brush(center_r, center_c, 1, 'fire')
-                self.im.set_array(self._build_display_image())
 
+            self.im.set_array(self._build_display_image())
             self.stats_history = []
-            # Calcular interval dinámico basado en velocidad para verdadero fast-forward
-            base_interval = BASE_INTERVAL_MS
-            dynamic_interval = max(10, base_interval // self.simulation_speed_multiplier)
-            self.ani = animation.FuncAnimation(self.fig, self._update_animation,
-                                               frames=self.simulation_steps, interval=dynamic_interval, blit=False)
+
+            interval = max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier)
+            self.ani = animation.FuncAnimation(
+                self.fig, self._update_animation,
+                frames=self.simulation_steps, interval=interval, blit=False
+            )
             self.fig.canvas.draw_idle()
 
         elif self.simulation_started and not self.simulation_paused:
@@ -434,7 +425,6 @@ class FireSimulationGUI:
         """Maneja el botón de finalizar simulación."""
         if not self.simulation_started or not self.simulation_paused:
             return
-
         if self.ani:
             self.ani.event_source.stop()
         self._reset_simulation_state()
@@ -476,7 +466,6 @@ class FireSimulationGUI:
         self.model.update_step()
         current_stats = self.model.compute_statistics()
         self.stats_history.append(current_stats)
-
         self.im.set_array(self._build_display_image())
 
         # Actualizar gráfico de estadísticas
