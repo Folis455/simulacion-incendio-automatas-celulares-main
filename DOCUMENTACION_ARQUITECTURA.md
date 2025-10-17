@@ -395,8 +395,8 @@ def _on_hover(self, event):
 ```python
 if event.key == 'm':  # Cambiar modo de pincel
     if event.key == '.':  # Aumentar tamaño de pincel
-    if event.key == ',':  # Disminuir tamaño de pincel
-    if event.key in '1234567890':  # Sequedad rápida
+        if event.key == ',':  # Disminuir tamaño de pincel
+            if event.key in '1234567890':  # Sequedad rápida
 ```
 
 **Justificación**: Atajos para edición eficiente sin apartar manos del mouse.
@@ -404,14 +404,6 @@ if event.key == 'm':  # Cambiar modo de pincel
 ### Función: _update_animation()
 
 #### Arquitectura de Animación
-
-```python
-# Ejecutar múltiples pasos según la velocidad
-for _ in range(self.simulation_speed_multiplier):
-    self.model.update_step()
-    current_stats = self.model.compute_statistics()
-    self.stats_history.append(current_stats)
-```
 
 **Decisiones**:
 

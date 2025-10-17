@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
+import tkinter as tk
+from tkinter import filedialog
 
 
 class FireSimulationGUI:
@@ -386,11 +388,6 @@ class FireSimulationGUI:
             self.button_main.ax.set_facecolor('red')
             self.button_finalize.ax.set_visible(False)
 
-            # Verificar si hay fuego, si no, iniciarlo en el centro
-            if BURNING not in self.model.land:
-                center_r, center_c = self.grid_size[0] // 2, self.grid_size[1] // 2
-                self.model.apply_brush(center_r, center_c, 1, 'fire')
-
             self.im.set_array(self._build_display_image())
             self.stats_history = []
 
@@ -515,6 +512,7 @@ class FireSimulationGUI:
                 humidity=self.model.humidity,
                 grass_density=self.model.grass_density
             )
+        root.destroy()
 
     def load_configs_from_file(self):
         root = tk.Tk()
@@ -533,13 +531,22 @@ class FireSimulationGUI:
                 self.slider_humidity.set_val(self.model.humidity)
                 self.slider_temperature.set_val(self.model.temperature)
                 self.slider_soil_moisture.set_val(self.model.soil_moisture)
-                self.slider_speed.set_val(self.simulation_speed_multiplier)
-                self.slider_brush_size.set_val(self.brush_size_cells)
-                self.slider_brush_dryness.set_val(self.brush_dryness_value)
                 self.slider_grass_density.set_val(self.grass_density)
 
-                # Para que se cargue el grid importado
                 if not self.simulation_started:
                     self.simulation_started = True
-                self._update_animation(frame=0)
-                self.fig.canvas.draw_idle()
+                self.simulation_paused = True
+
+                # Reiniciar animación
+                if self.ani:
+                    self.ani.event_source.stop()
+                self.ani = animation.FuncAnimation(
+                    self.fig, self._update_animation,
+                    frames=self.simulation_steps,
+                    interval=max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier),
+                    blit=False
+                )
+
+                self.im.set_array(self._build_display_image())
+                self.fig.canvas.draw()
+        root.destroy()

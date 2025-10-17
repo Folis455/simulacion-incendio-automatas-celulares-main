@@ -12,7 +12,7 @@ SLIDER_LIMITS = {
     "wind_y": (-10.0, 10.0, 0.5),
     "intensity": (0.0, 1.0, 0.05),
     "humidity": (0.0, 1.0, 0.05),
-    "temperature": (0.0, 50.0, 0.01),
+    "temperature": (10.0, 50.0, 1),
     "soil_moisture": (0.0, 1.0, 0.05),
     "speed": (1, 10, 1),
     "brush_size": (1, 25, 1),
