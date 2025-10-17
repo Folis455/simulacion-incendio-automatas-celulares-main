@@ -1,5 +1,5 @@
 from fire_simulation_model import FireSimulationModel, EMPTY, GRASS, BURNING, BURNT
-from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS
+from config.GUI_config import FIGSIZE, SLIDER_LIMITS, COLORS, BASE_INTERVAL_MS, STATS_AXIS
 from config.model_config import DEFAULT_GRID_SIZE
 
 import numpy as np
@@ -17,24 +17,18 @@ class FireSimulationGUI:
     Interfaz gráfica para la simulación de incendios de pastizales.
     """
 
-    def __init__(self, simulation_steps=50):
+    def __init__(self):
         """
         Inicializa la interfaz gráfica.
-
-        Args:
-            simulation_steps (int): Número de pasos de simulación
         """
         self.grid_size = DEFAULT_GRID_SIZE
-        self.simulation_steps = simulation_steps
         self.model = FireSimulationModel()
         self.grass_density = self.model.grass_density
 
-        # Variables de control de simulación
-        self.simulation_started = False
-        self.simulation_paused = False
+        self.simulation_paused = True
+        self.current_speed_mode = 'pause'  # 'pause', 'play', 'turbo'
         self.ani = None
         self.stats_history = []
-        self.simulation_speed_multiplier = 1
 
         # Variables de pincel
         self.brush_size_cells = 1
@@ -47,7 +41,10 @@ class FireSimulationGUI:
         self.is_mouse_button_down = False
         self.brush_info_text = None
 
-        # Configurar la interfaz
+        self.active_pause_button_color = 'lightcoral'
+        self.active_button_color = 'lightgreen'
+        self.inactive_button_color = 'lightgoldenrodyellow'
+
         self._setup_ui()
         self._setup_controls()
         self._setup_event_handlers()
@@ -66,23 +63,38 @@ class FireSimulationGUI:
         self.ax1.set_xticks([])
         self.ax1.set_yticks([])
 
-        # Panel de estadísticas
+        # Panel de estadísticas (Ahora usa STATS_AXIS)
         colors = ["white", "green", "red", "black"]
         self.line_empty, = self.ax2.plot([], [], color='lightgray', linestyle='-', label='Vacío (%)')
         self.line_grass, = self.ax2.plot([], [], color=colors[GRASS], linestyle='-', label='Pasto (%)')
         self.line_burning, = self.ax2.plot([], [], color=colors[BURNING], linestyle='-', label='Quemando (%)')
         self.line_burnt, = self.ax2.plot([], [], color=colors[BURNT], linestyle='-', label='Quemado (%)')
 
-        self.ax2.set_xlim(0, self.simulation_steps)
-        self.ax2.set_ylim(0, 100)
-        self.ax2.set_xlabel('Pasos de Simulación Reales')
-        self.ax2.set_ylabel('Porcentaje de Celdas (%)')
+        self.ax2.set_xlim(STATS_AXIS['xlim'])
+        self.ax2.set_ylim(STATS_AXIS['ylim'])
+        self.ax2.set_xlabel(STATS_AXIS['xlabel'])
+        self.ax2.set_ylabel(STATS_AXIS['ylabel'])
+        self.ax2.set_title(STATS_AXIS['title'])
+
         self.ax2.legend()
-        self.ax2.set_title("Evolución de Estados del Ecosistema")
         self.ax2.grid(True)
 
         # Ajustar layout para hacer espacio a los controles
         plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.45)
+
+        # Se crea la animación y se pausa inmediatamente.
+        self.ani = self._create_animation(BASE_INTERVAL_MS)
+        self.ani.event_source.stop()
+
+    def _create_animation(self, interval_ms):
+        interval_ms = max(10, int(interval_ms))
+
+        return animation.FuncAnimation(
+            self.fig, self._update_animation,
+            frames=None,
+            interval=interval_ms,
+            blit=False
+        )
 
     def _setup_controls(self):
         """Configura los sliders y botones de control."""
@@ -93,7 +105,6 @@ class FireSimulationGUI:
         ax_humidity = plt.axes([0.15, 0.25, 0.7, 0.025])
         ax_temperature = plt.axes([0.15, 0.20, 0.7, 0.025])
         ax_soil_moisture = plt.axes([0.15, 0.15, 0.7, 0.025])
-        ax_speed = plt.axes([0.15, 0.10, 0.7, 0.025])
         ax_brush_size = plt.axes([0.15, 0.075, 0.22, 0.025])
         ax_brush_dryness = plt.axes([0.39, 0.075, 0.22, 0.025])
         ax_grass_density = plt.axes([0.63, 0.075, 0.22, 0.025])
@@ -129,11 +140,6 @@ class FireSimulationGUI:
             valmin=SLIDER_LIMITS["soil_moisture"][0], valmax=SLIDER_LIMITS["soil_moisture"][1],
             valinit=self.model.soil_moisture, valstep=SLIDER_LIMITS["soil_moisture"][2]
         )
-        self.slider_speed = Slider(
-            ax_speed, label='Velocidad (Pasos/Cuadro)',
-            valmin=SLIDER_LIMITS["speed"][0], valmax=SLIDER_LIMITS["speed"][1],
-            valinit=self.simulation_speed_multiplier, valstep=SLIDER_LIMITS["speed"][2]
-        )
         self.slider_brush_size = Slider(
             ax_brush_size, label='Tamaño Pincel (celdas)',
             valmin=SLIDER_LIMITS["brush_size"][0], valmax=SLIDER_LIMITS["brush_size"][1],
@@ -157,22 +163,26 @@ class FireSimulationGUI:
         self.slider_humidity.on_changed(self._update_humidity)
         self.slider_temperature.on_changed(self._update_temperature)
         self.slider_soil_moisture.on_changed(self._update_soil_moisture)
-        self.slider_speed.on_changed(self._update_speed)
         self.slider_brush_size.on_changed(self._update_brush_size)
         self.slider_brush_dryness.on_changed(self._update_brush_dryness)
         self.slider_grass_density.on_changed(self._update_grass_density)
 
-        # Botones de control
-        button_color = 'lightgoldenrodyellow'
-        ax_button_main = plt.axes([0.25, 0.02, 0.2, 0.035])
-        self.button_main = Button(ax_button_main, 'Iniciar Simulación', color=button_color, hovercolor='0.975')
+        # --- Botones de Control ---
+        ax_button_pause = plt.axes([0.30, 0.02, 0.1, 0.035])
+        ax_button_play = plt.axes([0.41, 0.02, 0.1, 0.035])
+        ax_button_turbo = plt.axes([0.52, 0.02, 0.1, 0.035])
+        ax_button_reset = plt.axes([0.63, 0.02, 0.1, 0.035])
 
-        ax_button_finalize = plt.axes([0.55, 0.02, 0.2, 0.035])
-        self.button_finalize = Button(ax_button_finalize, 'Finalizar Simulación', color=button_color, hovercolor='0.975')
-        self.button_finalize.ax.set_visible(False)
+        self.button_pause = Button(ax_button_pause, 'Pausa', color=self.inactive_button_color, hovercolor='0.975')
+        self.button_play = Button(ax_button_play, 'Play', color=self.inactive_button_color, hovercolor='0.975')
+        self.button_turbo = Button(ax_button_turbo, 'Turbo', color=self.inactive_button_color, hovercolor='0.975')
+        self.button_reset = Button(ax_button_reset, 'Reset', color=self.inactive_button_color, hovercolor='0.975')
 
-        self.button_main.on_clicked(self._main_button_callback)
-        self.button_finalize.on_clicked(self._finalize_button_callback)
+        self.button_pause.on_clicked(self._on_pause_click)
+        self.button_play.on_clicked(self._on_play_click)
+        self.button_turbo.on_clicked(self._on_turbo_click)
+        self.button_reset.on_clicked(self._on_reset_click)
+        # ----------------------------------
 
         ax_button_save = plt.axes([0.05, 0.02, 0.15, 0.035])
         self.button_save = Button(ax_button_save, 'Guardar Config.')
@@ -182,6 +192,8 @@ class FireSimulationGUI:
         self.button_load = Button(ax_button_load, 'Cargar Config.')
         self.button_load.on_clicked(self._load_button_callback)
 
+        self._update_speed_buttons()
+
     def _setup_event_handlers(self):
         """Configura los manejadores de eventos."""
         self.fig.canvas.mpl_connect('button_press_event', self._on_click)
@@ -190,19 +202,11 @@ class FireSimulationGUI:
         self.fig.canvas.mpl_connect('key_press_event', self._on_key)
 
     def _build_display_image(self):
-        """
-        Construye la imagen de visualización con colores basados en estados y sequedad.
-        
-        Returns:
-            np.array: Imagen RGB de la cuadrícula
-        """
+        """Construye la imagen de visualización"""
         h, w = self.model.land.shape
         img = np.zeros((h, w, 3), dtype=float)
 
-        # Colores
         colors = {k: np.array(v) for k, v in COLORS.items()}
-
-        # Máscaras
         mask_empty = (self.model.land == EMPTY)
         mask_grass = (self.model.land == GRASS)
         mask_burning = (self.model.land == BURNING)
@@ -212,37 +216,28 @@ class FireSimulationGUI:
         img[mask_burning] = colors["red"]
         img[mask_burnt] = colors["black"]
 
-        # Pasto con degradado
         if np.any(mask_grass):
             dryness_norm = np.clip(self.model.dryness_grid / 100.0, 0.0, 1.0)
             w_yellow = np.power(dryness_norm[mask_grass], 1.5)
             w_green = 1.0 - w_yellow
             img[mask_grass] = w_green[:, None] * colors["green"] + w_yellow[:, None] * colors["yellow"]
 
-        # Agua
         water_mask = self.model.water_grid > 0
         if np.any(water_mask):
             img[water_mask] = colors["blue"]
-
             if self.show_water_overlay:
-                # Mostrar área de influencia del agua
                 from fire_simulation_model import WATER_EFFECT_RADIUS
                 pad = WATER_EFFECT_RADIUS
-
-                # Pad con False
                 padded = np.pad(water_mask, pad, mode='constant', constant_values=False)
-                # Crear vista as_strided
                 shape = (h, w, 2 * pad + 1, 2 * pad + 1)
                 strides = padded.strides + padded.strides
                 windows = as_strided(padded, shape=shape, strides=strides)
                 overlay_mask = np.any(windows, axis=(2, 3))
                 overlay_mask &= ~water_mask
-
                 if np.any(overlay_mask):
                     alpha = 0.25
                     cyan = colors["cyan"]
                     img[overlay_mask] = (1 - alpha) * img[overlay_mask] + alpha * cyan
-
         return img
 
     def update_brush_text(self):
@@ -277,7 +272,7 @@ class FireSimulationGUI:
                 self.current_highlight_patch = None
             return
 
-        if self.simulation_started and not self.simulation_paused:
+        if not self.simulation_paused:
             return
 
         c_hover, r_hover = int(round(event.xdata)), int(round(event.ydata))
@@ -335,7 +330,6 @@ class FireSimulationGUI:
             self.model.apply_brush(r, c, self.brush_size_cells, 'dryness', self.brush_dryness_value)
         else:
             self.model.apply_brush(r, c, self.brush_size_cells, self.painting_mode)
-
         self.im.set_array(self._build_display_image())
 
     # --------- Funciones de actualización de sliders ----------
@@ -357,13 +351,6 @@ class FireSimulationGUI:
     def _update_soil_moisture(self, val):
         self.model.soil_moisture = val
 
-    def _update_speed(self, val):
-        self.simulation_speed_multiplier = int(val)
-        # Actualizar interval de animación si está corriendo
-        if self.simulation_started and not self.simulation_paused and self.ani:
-            interval = max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier)
-            self.ani.event_source.interval = interval
-
     def _update_brush_size(self, val):
         self.brush_size_cells = int(val)
         self.update_brush_text()
@@ -376,90 +363,138 @@ class FireSimulationGUI:
         self.grass_density = float(val)
         self.model.grass_density = self.grass_density
 
-    # --------- Botones principales ----------
-    def _main_button_callback(self, event):
-        """Maneja el botón principal (Iniciar/Pausar/Reanudar)."""
-        if not self.simulation_started:
-            # Iniciar simulación
-            self.simulation_started = True
-            self.simulation_paused = False
+    def _update_speed_buttons(self):
+        """Actualiza el color de los botones de control."""
+        self.button_pause.color = self.active_pause_button_color if self.current_speed_mode == 'pause' else self.inactive_button_color
+        self.button_pause.ax.set_facecolor(self.button_pause.color)
 
-            self.button_main.label.set_text("Pausar")
-            self.button_main.ax.set_facecolor('red')
-            self.button_finalize.ax.set_visible(False)
+        self.button_play.color = self.active_button_color if self.current_speed_mode == 'play' else self.inactive_button_color
+        self.button_play.ax.set_facecolor(self.button_play.color)
 
-            self.im.set_array(self._build_display_image())
-            self.stats_history = []
+        self.button_turbo.color = self.active_button_color if self.current_speed_mode == 'turbo' else self.inactive_button_color
+        self.button_turbo.ax.set_facecolor(self.button_turbo.color)
 
-            interval = max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier)
-            self.ani = animation.FuncAnimation(
-                self.fig, self._update_animation,
-                frames=self.simulation_steps, interval=interval, blit=False
-            )
-            self.fig.canvas.draw_idle()
+        if self.simulation_paused:
+            self.button_reset.set_active(True)
+            self.button_reset.color = self.inactive_button_color
+            self.button_reset.ax.set_facecolor(self.inactive_button_color)
 
-        elif self.simulation_started and not self.simulation_paused:
-            # Pausar simulación
-            self.simulation_paused = True
-            if self.ani:
-                self.ani.event_source.stop()
-            self.button_main.label.set_text("Reanudar")
-            self.button_main.ax.set_facecolor('lightgreen')
-            self.button_finalize.ax.set_visible(True)
-            self.fig.canvas.draw_idle()
+            self.button_save.set_active(True)
+            self.button_save.color = 'lightgoldenrodyellow'
+            self.button_save.ax.set_facecolor('lightgoldenrodyellow')
 
-        elif self.simulation_started and self.simulation_paused:
-            # Reanudar simulación
-            self.simulation_paused = False
-            if self.ani:
-                self.ani.event_source.start()
-            self.button_main.label.set_text("Pausar")
-            self.button_main.ax.set_facecolor('red')
-            self.button_finalize.ax.set_visible(False)
-            self.fig.canvas.draw_idle()
+            self.button_load.set_active(True)
+            self.button_load.color = 'lightgoldenrodyellow'
+            self.button_load.ax.set_facecolor('lightgoldenrodyellow')
 
-    def _finalize_button_callback(self, event):
-        """Maneja el botón de finalizar simulación."""
-        if not self.simulation_started or not self.simulation_paused:
+        else:
+            # Deshabilitar Reset, Guardar y Cargar
+            disabled_color = '0.85'  # Un color gris claro
+
+            self.button_reset.set_active(False)
+            self.button_reset.color = disabled_color
+            self.button_reset.ax.set_facecolor(disabled_color)
+
+            self.button_save.set_active(False)
+            self.button_save.color = disabled_color
+            self.button_save.ax.set_facecolor(disabled_color)
+
+            self.button_load.set_active(False)
+            self.button_load.color = disabled_color
+            self.button_load.ax.set_facecolor(disabled_color)
+
+        self.fig.canvas.draw_idle()
+
+    def _save_button_callback(self):
+        if not self.simulation_paused:
+            return
+        self.save_configs_to_file()
+
+    def _load_button_callback(self):
+        if not self.simulation_paused:
+            return
+        self.load_configs_from_file()
+
+    def _on_pause_click(self):
+        """Maneja el clic en el botón de Pausa."""
+        if self.ani:
+            self.ani.event_source.stop()
+
+        self.simulation_paused = True
+        self.current_speed_mode = 'pause'
+        self._update_speed_buttons()
+
+    def _on_play_click(self):
+        """Maneja el clic en el botón de Play (velocidad normal)."""
+        if not self.simulation_paused and self.current_speed_mode == 'play':
+            return
+
+        if self.ani:
+            self.ani.event_source.stop()
+
+        self.ani = self._create_animation(BASE_INTERVAL_MS)
+        self.simulation_paused = False
+        self.current_speed_mode = 'play'
+        self._update_speed_buttons()
+
+    def _on_turbo_click(self, event):
+        """Maneja el clic en el botón de Turbo."""
+        if not self.simulation_paused and self.current_speed_mode == 'turbo':
             return
         if self.ani:
             self.ani.event_source.stop()
-        self._reset_simulation_state()
+        self.ani = self._create_animation(max(10, int(BASE_INTERVAL_MS / 10)))
+        self.simulation_paused = False
+        self.current_speed_mode = 'turbo'
+        self._update_speed_buttons()
+
+    def _on_reset_click(self, event):
+        """Maneja el clic en el botón de Reset."""
+        if not self.simulation_paused:
+            return
+        if self.ani:
+            self.ani.event_source.stop()
+        self.ani = self._create_animation(BASE_INTERVAL_MS)
+        self.ani.event_source.stop()
+        self.model = FireSimulationModel()
+        self.im.set_array(self._build_display_image())
+        self.stats_history = []
+        self.line_empty.set_data([], [])
+        self.line_grass.set_data([], [])
+        self.line_burning.set_data([], [])
+        self.line_burnt.set_data([], [])
+        self.ax2.set_xlim(STATS_AXIS['xlim'])
+        self._update_speed_buttons()
+        self.fig.canvas.draw_idle()
+        self.update_brush_text()
 
     def _reset_simulation_state(self):
         """Resetea la simulación a su estado inicial."""
-        self.simulation_started = False
-        self.simulation_paused = False
-
+        self.simulation_paused = True
+        self.current_speed_mode = 'pause'
+        if self.ani:
+            self.ani.event_source.stop()
         self.model = FireSimulationModel()
         self.im.set_array(self._build_display_image())
 
+        # Resetear estadísticas
         self.stats_history = []
-        x_data = []
-        empty_data = []
-        grass_data = []
-        burning_data = []
-        burnt_data = []
+        self.line_empty.set_data([], [])
+        self.line_grass.set_data([], [])
+        self.line_burning.set_data([], [])
+        self.line_burnt.set_data([], [])
+        self.ax2.set_xlim(STATS_AXIS['xlim'])
 
-        self.line_empty.set_data(x_data, empty_data)
-        self.line_grass.set_data(x_data, grass_data)
-        self.line_burning.set_data(x_data, burning_data)
-        self.line_burnt.set_data(x_data, burnt_data)
-        self.ax2.set_xlim(0, self.simulation_steps)
-
-        self.button_main.label.set_text("Iniciar Simulación")
-        self.button_main.ax.set_facecolor('lightgoldenrodyellow')
-        self.button_finalize.ax.set_visible(False)
-
+        # Actualizar estado de botones
+        self._update_speed_buttons()
         self.fig.canvas.draw_idle()
         self.update_brush_text()
 
     def _update_animation(self, frame):
         """Actualiza la animación en cada frame."""
-        if not self.simulation_started or self.simulation_paused:
+        if self.simulation_paused:
             return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
-        # Ejecutar UN solo paso por frame (velocidad controlada por interval)
         self.model.update_step()
         current_stats = self.model.compute_statistics()
         self.stats_history.append(current_stats)
@@ -473,21 +508,14 @@ class FireSimulationGUI:
         self.line_burnt.set_data(x_data, [s['burnt'] for s in self.stats_history])
 
         if x_data:
-            # Ajustar rango del gráfico basado en pasos reales ejecutados
-            self.ax2.set_xlim(0, max(self.simulation_steps, len(x_data)) + 1)
+            min_width = STATS_AXIS['xlim'][1]
+            self.ax2.set_xlim(STATS_AXIS['xlim'][0], max(min_width, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
     def show(self):
         """Muestra la interfaz gráfica."""
         plt.show()
-
-    # --------- Guardar y cargar configuración ----------
-    def _save_button_callback(self, event):
-        self.save_configs_to_file()
-
-    def _load_button_callback(self, event):
-        self.load_configs_from_file()
 
     def save_configs_to_file(self):
         """Guarda el estado del modelo en un archivo NPZ comprimido."""
@@ -515,6 +543,7 @@ class FireSimulationGUI:
         root.destroy()
 
     def load_configs_from_file(self):
+        """Carga el estado del modelo desde un archivo NPZ."""
         root = tk.Tk()
         root.withdraw()
         file_path = filedialog.askopenfilename(
@@ -533,19 +562,13 @@ class FireSimulationGUI:
                 self.slider_soil_moisture.set_val(self.model.soil_moisture)
                 self.slider_grass_density.set_val(self.grass_density)
 
-                if not self.simulation_started:
-                    self.simulation_started = True
                 self.simulation_paused = True
-
-                # Reiniciar animación
+                self.current_speed_mode = 'pause'
                 if self.ani:
                     self.ani.event_source.stop()
-                self.ani = animation.FuncAnimation(
-                    self.fig, self._update_animation,
-                    frames=self.simulation_steps,
-                    interval=max(10, BASE_INTERVAL_MS // self.simulation_speed_multiplier),
-                    blit=False
-                )
+                self.ani = self._create_animation(BASE_INTERVAL_MS)
+                self.ani.event_source.stop()
+                self._update_speed_buttons()
 
                 self.im.set_array(self._build_display_image())
                 self.fig.canvas.draw()

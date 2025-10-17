@@ -1,5 +1,6 @@
 FIGSIZE = (17, 8)
 STATS_AXIS = dict(
+    xlim=(0, 50),
     ylim=(0, 100),
     xlabel='Pasos de Simulación Reales',
     ylabel='Porcentaje de Celdas (%)',
@@ -30,4 +31,4 @@ COLORS = {
 }
 
 # Animación
-BASE_INTERVAL_MS = 5
+BASE_INTERVAL_MS = 500
