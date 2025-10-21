@@ -346,15 +346,6 @@ class FireSimulationGUI:
         self.im.set_array(self._build_display_image())
 
     # --------- Funciones de actualización de sliders ----------
-    def _update_wind_x(self, val):
-        self.model.wind_direction[1] = val
-
-    def _update_wind_y(self, val):
-        self.model.wind_direction[0] = val
-
-    def _update_intensity(self, val):
-        self.model.wind_intensity = val
-
     def _update_humidity(self, val):
         self.model.humidity = val
 

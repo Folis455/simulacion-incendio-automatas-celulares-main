@@ -220,7 +220,7 @@ class FireSimulationModel:
     def apply_brush(self, r_center: int, c_center: int, brush_size: int, brush_type: str, value: float | None = None) -> None:
         """
         Aplica un pincel en la cuadrícula.
-        
+
         Args:
             r_center (int): Fila central del pincel
             c_center (int): Columna central del pincel
@@ -240,6 +240,7 @@ class FireSimulationModel:
             self.land[r_start:r_end, c_start:c_end] = GRASS
         elif brush_type == 'empty':
             self.land[r_start:r_end, c_start:c_end] = EMPTY
+            self.water_grid[r_start:r_end, c_start:c_end] = 0
         elif brush_type == 'water':
             self.water_grid[r_start:r_end, c_start:c_end] = 1
         elif brush_type == 'dryness' and value is not None:
