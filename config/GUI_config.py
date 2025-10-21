@@ -9,13 +9,11 @@ STATS_AXIS = dict(
 
 # Rango sliders -> Valor Minimo, Valor Maximo, Tasa de Cambio
 SLIDER_LIMITS = {
-    "wind_x": (-10.0, 10.0, 0.5),
-    "wind_y": (-10.0, 10.0, 0.5),
-    "intensity": (0.0, 1.0, 0.05),
+    "wind_angle": (0, 360, 1),
+    "wind_speed": (0.0, 15.0, 0.5),
     "humidity": (0.0, 1.0, 0.05),
     "temperature": (10.0, 50.0, 1),
     "soil_moisture": (0.0, 1.0, 0.05),
-    "speed": (1, 10, 1),
     "brush_size": (1, 25, 1),
     "brush_dryness": (0, 100, 1),
     "grass_density": (0, 100, 0.05),

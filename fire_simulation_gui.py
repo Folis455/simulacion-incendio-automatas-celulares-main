@@ -25,6 +25,14 @@ class FireSimulationGUI:
         self.model = FireSimulationModel()
         self.grass_density = self.model.grass_density
 
+        model_y, model_x = self.model.wind_direction
+        model_intensity = self.model.wind_intensity
+        self.wind_angle = np.rad2deg(np.arctan2(-model_x, model_y))
+        if self.wind_angle < 0:
+            self.wind_angle += 360
+        max_speed = SLIDER_LIMITS["wind_speed"][1]
+        self.wind_speed = model_intensity * max_speed
+
         self.simulation_paused = True
         self.current_speed_mode = 'pause'  # 'pause', 'play', 'turbo'
         self.ani = None
@@ -48,6 +56,7 @@ class FireSimulationGUI:
         self._setup_ui()
         self._setup_controls()
         self._setup_event_handlers()
+        self._calculate_and_set_wind()
 
         # Mostrar texto inicial del pincel
         self.update_brush_text()
@@ -62,6 +71,17 @@ class FireSimulationGUI:
         self.ax1.set_title("Simulación de Incendio (Autómata Celular Estocástico)")
         self.ax1.set_xticks([])
         self.ax1.set_yticks([])
+
+        compass_props = dict(
+            fontsize=8,
+            fontweight='bold',
+            color='black',
+            transform=self.ax1.transAxes
+        )
+        self.ax1.text(0.5, 0.95, '0° (N)', ha='center', va='top', **compass_props)
+        self.ax1.text(0.5, 0.05, '180° (S)', ha='center', va='bottom', **compass_props)
+        self.ax1.text(0.95, 0.5, '90° (E)', ha='right', va='center', **compass_props)
+        self.ax1.text(0.05, 0.5, '270° (O)', ha='left', va='center', **compass_props)
 
         # Panel de estadísticas (Ahora usa STATS_AXIS)
         colors = ["white", "green", "red", "black"]
@@ -99,31 +119,25 @@ class FireSimulationGUI:
     def _setup_controls(self):
         """Configura los sliders y botones de control."""
         # Crear ejes para los sliders
-        ax_wind_x = plt.axes([0.15, 0.40, 0.7, 0.025])
-        ax_wind_y = plt.axes([0.15, 0.35, 0.7, 0.025])
-        ax_intensity = plt.axes([0.15, 0.30, 0.7, 0.025])
-        ax_humidity = plt.axes([0.15, 0.25, 0.7, 0.025])
-        ax_temperature = plt.axes([0.15, 0.20, 0.7, 0.025])
-        ax_soil_moisture = plt.axes([0.15, 0.15, 0.7, 0.025])
-        ax_brush_size = plt.axes([0.15, 0.075, 0.22, 0.025])
-        ax_brush_dryness = plt.axes([0.39, 0.075, 0.22, 0.025])
-        ax_grass_density = plt.axes([0.63, 0.075, 0.22, 0.025])
+        ax_wind_angle = plt.axes([0.15, 0.40, 0.7, 0.025])
+        ax_wind_speed = plt.axes([0.15, 0.35, 0.7, 0.025])
+        ax_humidity = plt.axes([0.15, 0.30, 0.7, 0.025])
+        ax_temperature = plt.axes([0.15, 0.25, 0.7, 0.025])
+        ax_soil_moisture = plt.axes([0.15, 0.20, 0.7, 0.025])
+        ax_brush_size = plt.axes([0.15, 0.15, 0.7, 0.025])
+        ax_brush_dryness = plt.axes([0.15, 0.10, 0.7, 0.025])
+        ax_grass_density = plt.axes([0.15, 0.05, 0.7, 0.025])
 
         # Crear sliders
-        self.slider_wind_x = Slider(
-            ax_wind_x, label='Viento X',
-            valmin=SLIDER_LIMITS["wind_x"][0], valmax=SLIDER_LIMITS["wind_x"][1],
-            valinit=self.model.wind_direction[1], valstep=SLIDER_LIMITS["wind_x"][2]
+        self.slider_wind_angle = Slider(
+            ax_wind_angle, label='Dirección Viento (°)',
+            valmin=SLIDER_LIMITS["wind_angle"][0], valmax=SLIDER_LIMITS["wind_angle"][1],
+            valinit=self.wind_angle, valstep=SLIDER_LIMITS["wind_angle"][2]
         )
-        self.slider_wind_y = Slider(
-            ax_wind_y, label='Viento Y',
-            valmin=SLIDER_LIMITS["wind_y"][0], valmax=SLIDER_LIMITS["wind_y"][1],
-            valinit=self.model.wind_direction[0], valstep=SLIDER_LIMITS["wind_y"][2]
-        )
-        self.slider_intensity = Slider(
-            ax_intensity, label='Intensidad Viento',
-            valmin=SLIDER_LIMITS["intensity"][0], valmax=SLIDER_LIMITS["intensity"][1],
-            valinit=self.model.wind_intensity, valstep=SLIDER_LIMITS["intensity"][2]
+        self.slider_wind_speed = Slider(
+            ax_wind_speed, label='Velocidad Viento',
+            valmin=SLIDER_LIMITS["wind_speed"][0], valmax=SLIDER_LIMITS["wind_speed"][1],
+            valinit=self.wind_speed, valstep=SLIDER_LIMITS["wind_speed"][2]
         )
         self.slider_humidity = Slider(
             ax_humidity, label='Humedad Aire',
@@ -157,9 +171,8 @@ class FireSimulationGUI:
         )
 
         # Conectar sliders a funciones de actualización
-        self.slider_wind_x.on_changed(self._update_wind_x)
-        self.slider_wind_y.on_changed(self._update_wind_y)
-        self.slider_intensity.on_changed(self._update_intensity)
+        self.slider_wind_angle.on_changed(self._update_wind_angle)
+        self.slider_wind_speed.on_changed(self._update_wind_speed)
         self.slider_humidity.on_changed(self._update_humidity)
         self.slider_temperature.on_changed(self._update_temperature)
         self.slider_soil_moisture.on_changed(self._update_soil_moisture)
@@ -415,7 +428,7 @@ class FireSimulationGUI:
             return
         self.load_configs_from_file()
 
-    def _on_pause_click(self):
+    def _on_pause_click(self, event):
         """Maneja el clic en el botón de Pausa."""
         if self.ani:
             self.ani.event_source.stop()
@@ -424,7 +437,7 @@ class FireSimulationGUI:
         self.current_speed_mode = 'pause'
         self._update_speed_buttons()
 
-    def _on_play_click(self):
+    def _on_play_click(self, event):
         """Maneja el clic en el botón de Play (velocidad normal)."""
         if not self.simulation_paused and self.current_speed_mode == 'play':
             return
@@ -513,6 +526,31 @@ class FireSimulationGUI:
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
 
+    def _calculate_and_set_wind(self):
+        """
+        Convierte (Ángulo GUI, Velocidad GUI) a (Vector Normalizado, Intensidad 0-1) y actualiza el modelo.
+        """
+        angle_rad = np.deg2rad(self.wind_angle)
+        norm_y = np.cos(angle_rad)
+        norm_x = np.sin(angle_rad)
+        self.model.wind_direction = [norm_y, -norm_x]
+        max_speed = SLIDER_LIMITS["wind_speed"][1]
+        intensity = self.wind_speed / max_speed if max_speed > 0 else 0
+        self.model.wind_intensity = intensity
+
+    def _update_wind_angle(self, val):
+        """Se llama cuando el slider de ángulo cambia."""
+        self.wind_angle = val
+        self._calculate_and_set_wind()
+
+    def _update_wind_speed(self, val):
+        """Se llama cuando el slider de velocidad cambia."""
+        self.wind_speed = val
+        self._calculate_and_set_wind()
+
+    def _update_humidity(self, val):
+        self.model.humidity = val
+
     def show(self):
         """Muestra la interfaz gráfica."""
         plt.show()
@@ -553,10 +591,18 @@ class FireSimulationGUI:
         if file_path:
             with np.load(file_path) as data:
                 self.model.import_state(data)
-                # Actualizar sliders con los valores cargados
-                self.slider_wind_x.set_val(self.model.wind_direction[1])
-                self.slider_wind_y.set_val(self.model.wind_direction[0])
-                self.slider_intensity.set_val(self.model.wind_intensity)
+
+                model_y, model_x = self.model.wind_direction
+                model_intensity = self.model.wind_intensity
+                self.wind_angle = np.rad2deg(np.arctan2(-model_x, model_y))
+                if self.wind_angle < 0:
+                    self.wind_angle += 360
+                max_speed = SLIDER_LIMITS["wind_speed"][1]
+                self.wind_speed = model_intensity * max_speed
+                self._calculate_and_set_wind()
+
+                self.slider_wind_angle.set_val(self.wind_angle)
+                self.slider_wind_speed.set_val(self.wind_speed)
                 self.slider_humidity.set_val(self.model.humidity)
                 self.slider_temperature.set_val(self.model.temperature)
                 self.slider_soil_moisture.set_val(self.model.soil_moisture)
