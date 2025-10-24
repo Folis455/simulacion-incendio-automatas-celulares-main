@@ -23,7 +23,7 @@ class FireSimulationGUI:
         """
         self.grid_size = DEFAULT_GRID_SIZE
         self.model = FireSimulationModel()
-        self.grass_density = self.model.grass_density
+        self.grass_density = self.model.grass_density * 100.0  # El modelo usa valores 0-1
 
         model_y, model_x = self.model.wind_direction
         model_intensity = self.model.wind_intensity
@@ -41,13 +41,20 @@ class FireSimulationGUI:
         # Variables de pincel
         self.brush_size_cells = 1
         self.brush_dryness_value = 50
-        self.painting_mode = 'fire'  # 'fire', 'dryness', 'water', 'grass', 'empty'
+        self.painting_mode = 'fire'
+        self.painting_modes = ['fire', 'grass', 'water', 'dryness', 'empty']
+        self.brush_icons = {}
+        self.brush_buttons = {}
         self.show_water_overlay = False
+
+        for mode in self.painting_modes:
+            img = plt.imread(f'./icons/{mode}.png')
+            self.brush_icons[mode] = img
 
         # Variables de interacción
         self.current_highlight_patch = None
         self.is_mouse_button_down = False
-        self.brush_info_text = None
+        self.brush_size_label = None
 
         self.active_pause_button_color = 'lightcoral'
         self.active_button_color = 'lightgreen'
@@ -113,20 +120,67 @@ class FireSimulationGUI:
             self.fig, self._update_animation,
             frames=None,
             interval=interval_ms,
-            blit=False
+            blit=False,
+            cache_frame_data=False
         )
 
     def _setup_controls(self):
-        """Configura los sliders y botones de control."""
-        # Crear ejes para los sliders
-        ax_wind_angle = plt.axes([0.15, 0.40, 0.7, 0.025])
-        ax_wind_speed = plt.axes([0.15, 0.35, 0.7, 0.025])
-        ax_humidity = plt.axes([0.15, 0.30, 0.7, 0.025])
-        ax_temperature = plt.axes([0.15, 0.25, 0.7, 0.025])
-        ax_soil_moisture = plt.axes([0.15, 0.20, 0.7, 0.025])
-        ax_brush_size = plt.axes([0.15, 0.15, 0.7, 0.025])
-        ax_brush_dryness = plt.axes([0.15, 0.10, 0.7, 0.025])
-        ax_grass_density = plt.axes([0.15, 0.05, 0.7, 0.025])
+        """Configura todos los sliders y botones de control."""
+        self._setup_toolbar_controls()
+        self._setup_slider_controls()
+        self._setup_playback_controls()
+        self._setup_file_controls()
+
+        self._update_speed_buttons()
+        self._update_brush_buttons()
+
+    def _setup_toolbar_controls(self):
+        """Configura la barra de herramientas superior (pinceles, tamaño, sequedad)."""
+        btn_size = 0.04
+        start_x = 0.05
+        y_pos_top = 0.94
+
+        # 1. Botones de Iconos de Pincel
+        for i, mode in enumerate(self.painting_modes):
+            x_pos = start_x + i * (btn_size + 0.005)
+            ax_btn = plt.axes([x_pos, y_pos_top, btn_size, btn_size])
+            btn = Button(ax_btn, '')
+            if self.brush_icons[mode] is not None:
+                btn.ax.imshow(self.brush_icons[mode])
+            else:
+                btn.ax.text(0.5, 0.5, mode[0], ha='center', va='center', fontsize=10)
+            btn.ax.set_xticks([]);
+            btn.ax.set_yticks([])
+            btn.on_clicked(lambda event, m=mode: self._set_paint_mode(m))
+            self.brush_buttons[mode] = btn
+
+        # 2. Botones de Tamaño de Pincel (+/-)
+        ax_brush_minus = plt.axes([0.38, y_pos_top, 0.03, btn_size])
+        self.button_brush_minus = Button(ax_brush_minus, '-')
+        self.button_brush_minus.on_clicked(self._on_brush_minus_click)
+
+        ax_brush_plus = plt.axes([0.42, y_pos_top, 0.03, btn_size])
+        self.button_brush_plus = Button(ax_brush_plus, '+')
+        self.button_brush_plus.on_clicked(self._on_brush_plus_click)
+
+        # 3. Slider de Sequedad
+        ax_brush_dryness_top = plt.axes([0.60, 0.95, 0.25, 0.025])
+        self.slider_brush_dryness = Slider(
+            ax_brush_dryness_top, label='Sequedad Pincel',
+            valmin=SLIDER_LIMITS["brush_dryness"][0], valmax=SLIDER_LIMITS["brush_dryness"][1],
+            valinit=self.brush_dryness_value, valstep=SLIDER_LIMITS["brush_dryness"][2]
+        )
+        self.slider_brush_dryness.on_changed(self._update_brush_dryness)
+        self.slider_brush_dryness.ax.set_visible(False)
+
+    def _setup_slider_controls(self):
+        """Configura los 6 sliders de parámetros del modelo."""
+        ax_wind_angle = plt.axes([0.15, 0.35, 0.7, 0.025])
+        ax_wind_speed = plt.axes([0.15, 0.30, 0.7, 0.025])
+        ax_humidity = plt.axes([0.15, 0.25, 0.7, 0.025])
+        ax_temperature = plt.axes([0.15, 0.20, 0.7, 0.025])
+        ax_soil_moisture = plt.axes([0.15, 0.15, 0.7, 0.025])
+        ax_grass_density = plt.axes([0.15, 0.10, 0.7, 0.025])
 
         # Crear sliders
         self.slider_wind_angle = Slider(
@@ -154,33 +208,21 @@ class FireSimulationGUI:
             valmin=SLIDER_LIMITS["soil_moisture"][0], valmax=SLIDER_LIMITS["soil_moisture"][1],
             valinit=self.model.soil_moisture, valstep=SLIDER_LIMITS["soil_moisture"][2]
         )
-        self.slider_brush_size = Slider(
-            ax_brush_size, label='Tamaño Pincel (celdas)',
-            valmin=SLIDER_LIMITS["brush_size"][0], valmax=SLIDER_LIMITS["brush_size"][1],
-            valinit=self.brush_size_cells, valstep=SLIDER_LIMITS["brush_size"][2]
-        )
-        self.slider_brush_dryness = Slider(
-            ax_brush_dryness, label='Sequedad [0-100]',
-            valmin=SLIDER_LIMITS["brush_dryness"][0], valmax=SLIDER_LIMITS["brush_dryness"][1],
-            valinit=self.brush_dryness_value, valstep=SLIDER_LIMITS["brush_dryness"][2]
-        )
         self.slider_grass_density = Slider(
             ax_grass_density, label='Densidad Pasto',
             valmin=SLIDER_LIMITS["grass_density"][0], valmax=SLIDER_LIMITS["grass_density"][1],
             valinit=self.grass_density, valstep=SLIDER_LIMITS["grass_density"][2]
         )
 
-        # Conectar sliders a funciones de actualización
         self.slider_wind_angle.on_changed(self._update_wind_angle)
         self.slider_wind_speed.on_changed(self._update_wind_speed)
         self.slider_humidity.on_changed(self._update_humidity)
         self.slider_temperature.on_changed(self._update_temperature)
         self.slider_soil_moisture.on_changed(self._update_soil_moisture)
-        self.slider_brush_size.on_changed(self._update_brush_size)
-        self.slider_brush_dryness.on_changed(self._update_brush_dryness)
         self.slider_grass_density.on_changed(self._update_grass_density)
 
-        # --- Botones de Control ---
+    def _setup_playback_controls(self):
+        """Configura los botones de Play, Pausa, Turbo y Reset."""
         ax_button_pause = plt.axes([0.30, 0.02, 0.1, 0.035])
         ax_button_play = plt.axes([0.41, 0.02, 0.1, 0.035])
         ax_button_turbo = plt.axes([0.52, 0.02, 0.1, 0.035])
@@ -195,8 +237,9 @@ class FireSimulationGUI:
         self.button_play.on_clicked(self._on_play_click)
         self.button_turbo.on_clicked(self._on_turbo_click)
         self.button_reset.on_clicked(self._on_reset_click)
-        # ----------------------------------
 
+    def _setup_file_controls(self):
+        """Configura los botones de Guardar y Cargar."""
         ax_button_save = plt.axes([0.05, 0.02, 0.15, 0.035])
         self.button_save = Button(ax_button_save, 'Guardar Config.')
         self.button_save.on_clicked(self._save_button_callback)
@@ -204,8 +247,6 @@ class FireSimulationGUI:
         ax_button_load = plt.axes([0.75, 0.02, 0.15, 0.035])
         self.button_load = Button(ax_button_load, 'Cargar Config.')
         self.button_load.on_clicked(self._load_button_callback)
-
-        self._update_speed_buttons()
 
     def _setup_event_handlers(self):
         """Configura los manejadores de eventos."""
@@ -254,12 +295,16 @@ class FireSimulationGUI:
         return img
 
     def update_brush_text(self):
-        """Actualiza el texto de información del pincel."""
-        status = f"Modo: {self.painting_mode.upper()} | Pincel: {self.brush_size_cells} | Sequedad: {int(self.brush_dryness_value)}"
-        if self.brush_info_text is None:
-            self.brush_info_text = self.fig.text(0.05, 0.94, status)
+        """Actualiza el texto de tamaño del pincel."""
+        status = f"Pincel: {self.brush_size_cells}"
+
+        if self.painting_mode == 'dryness':
+            status += f" | Sequedad: {int(self.brush_dryness_value)}"
+
+        if self.brush_size_label is None:
+            self.brush_size_label = self.fig.text(0.30, 0.955, status, va='center')
         else:
-            self.brush_info_text.set_text(status)
+            self.brush_size_label.set_text(status)
         self.fig.canvas.draw_idle()
 
     def _on_click(self, event):
@@ -309,29 +354,36 @@ class FireSimulationGUI:
     def _on_key(self, event):
         """Maneja eventos de teclado."""
         if event.key == 'm':
-            # Rotar modo de pincel
-            modes = ['fire', 'dryness', 'water', 'grass', 'empty']
-            current_idx = modes.index(self.painting_mode)
-            self.painting_mode = modes[(current_idx + 1) % len(modes)]
-            self.update_brush_text()
+            current_idx = self.painting_modes.index(self.painting_mode)
+            next_mode = self.painting_modes[(current_idx + 1) % len(self.painting_modes)]
+            self._set_paint_mode(next_mode)
         elif event.key == '.':
-            self.brush_size_cells = min(25, self.brush_size_cells + 1)
+            step = SLIDER_LIMITS["brush_size"][2]
+            self.brush_size_cells = min(SLIDER_LIMITS["brush_size"][1], self.brush_size_cells + step)
             self.update_brush_text()
         elif event.key == ',':
-            self.brush_size_cells = max(1, self.brush_size_cells - 1)
+            step = SLIDER_LIMITS["brush_size"][2]
+            self.brush_size_cells = max(SLIDER_LIMITS["brush_size"][0], self.brush_size_cells - step)
             self.update_brush_text()
-        elif event.key == '|':
+
+        # Teclas de Sequedad (Solo si el pincel es 'dryness')
+        elif event.key == '|' and self.painting_mode == 'dryness':
             self.brush_dryness_value = 0
+            self.slider_brush_dryness.set_val(self.brush_dryness_value)
             self.update_brush_text()
-        elif event.key in '1234567890':
+        elif event.key in '1234567890' and self.painting_mode == 'dryness':
             self.brush_dryness_value = int(event.key) * 10 if event.key != '0' else 100
+            self.slider_brush_dryness.set_val(self.brush_dryness_value)
             self.update_brush_text()
-        elif event.key == '{':
+        elif event.key == '{' and self.painting_mode == 'dryness':
             self.brush_dryness_value = max(0, self.brush_dryness_value - 5)
+            self.slider_brush_dryness.set_val(self.brush_dryness_value)
             self.update_brush_text()
-        elif event.key == '}':
+        elif event.key == '}' and self.painting_mode == 'dryness':
             self.brush_dryness_value = min(100, self.brush_dryness_value + 5)
+            self.slider_brush_dryness.set_val(self.brush_dryness_value)
             self.update_brush_text()
+
         elif event.key == 'h':
             self.show_water_overlay = not self.show_water_overlay
             self.im.set_array(self._build_display_image())
@@ -345,7 +397,28 @@ class FireSimulationGUI:
             self.model.apply_brush(r, c, self.brush_size_cells, self.painting_mode)
         self.im.set_array(self._build_display_image())
 
-    # --------- Funciones de actualización de sliders ----------
+    def _calculate_and_set_wind(self):
+        """
+        Convierte (Ángulo GUI, Velocidad GUI) a (Vector Normalizado, Intensidad 0-1) y actualiza el modelo.
+        """
+        angle_rad = np.deg2rad(self.wind_angle)
+        norm_y = np.cos(angle_rad)
+        norm_x = np.sin(angle_rad)
+        self.model.wind_direction = [norm_y, -norm_x]
+        max_speed = SLIDER_LIMITS["wind_speed"][1]
+        intensity = self.wind_speed / max_speed if max_speed > 0 else 0
+        self.model.wind_intensity = intensity
+
+    def _update_wind_angle(self, val):
+        """Se llama cuando el slider de ángulo cambia."""
+        self.wind_angle = val
+        self._calculate_and_set_wind()
+
+    def _update_wind_speed(self, val):
+        """Se llama cuando el slider de velocidad cambia."""
+        self.wind_speed = val
+        self._calculate_and_set_wind()
+
     def _update_humidity(self, val):
         self.model.humidity = val
 
@@ -355,17 +428,52 @@ class FireSimulationGUI:
     def _update_soil_moisture(self, val):
         self.model.soil_moisture = val
 
-    def _update_brush_size(self, val):
-        self.brush_size_cells = int(val)
-        self.update_brush_text()
-
     def _update_brush_dryness(self, val):
         self.brush_dryness_value = int(val)
         self.update_brush_text()
 
     def _update_grass_density(self, val):
-        self.grass_density = float(val)
-        self.model.grass_density = self.grass_density
+        self.grass_density = float(val)  # val está en 0-100
+        self.model.grass_density = self.grass_density / 100.0  # Convertir a 0-1 para el modelo
+
+    def _set_paint_mode(self, mode):
+        """Establece el modo de pintura y actualiza la UI."""
+        self.painting_mode = mode
+
+        is_dryness_mode = (self.painting_mode == 'dryness')
+        self.slider_brush_dryness.ax.set_visible(is_dryness_mode)
+        if is_dryness_mode:
+            self.slider_brush_dryness.set_val(self.brush_dryness_value)
+
+        self.update_brush_text()
+        self._update_brush_buttons()
+
+    def _update_brush_buttons(self):
+        """Resalta el botón de pincel activo."""
+        for mode, btn in self.brush_buttons.items():
+            if mode == self.painting_mode:
+                color = self.active_button_color
+            else:
+                color = self.inactive_button_color
+
+            btn.color = color
+            btn.ax.set_facecolor(color)
+
+        self.fig.canvas.draw_idle()
+
+    def _on_brush_plus_click(self, event):
+        """Aumenta el tamaño del pincel."""
+        max_size = SLIDER_LIMITS["brush_size"][1]
+        step = SLIDER_LIMITS["brush_size"][2]
+        self.brush_size_cells = min(max_size, self.brush_size_cells + step)
+        self.update_brush_text()
+
+    def _on_brush_minus_click(self, event):
+        """Reduce el tamaño del pincel."""
+        min_size = SLIDER_LIMITS["brush_size"][0]
+        step = SLIDER_LIMITS["brush_size"][2]
+        self.brush_size_cells = max(min_size, self.brush_size_cells - step)
+        self.update_brush_text()
 
     def _update_speed_buttons(self):
         """Actualiza el color de los botones de control."""
@@ -409,12 +517,12 @@ class FireSimulationGUI:
 
         self.fig.canvas.draw_idle()
 
-    def _save_button_callback(self):
+    def _save_button_callback(self, event):
         if not self.simulation_paused:
             return
         self.save_configs_to_file()
 
-    def _load_button_callback(self):
+    def _load_button_callback(self, event):
         if not self.simulation_paused:
             return
         self.load_configs_from_file()
@@ -456,21 +564,11 @@ class FireSimulationGUI:
         """Maneja el clic en el botón de Reset."""
         if not self.simulation_paused:
             return
-        if self.ani:
-            self.ani.event_source.stop()
+
+        self._reset_simulation_state()
+
         self.ani = self._create_animation(BASE_INTERVAL_MS)
         self.ani.event_source.stop()
-        self.model = FireSimulationModel()
-        self.im.set_array(self._build_display_image())
-        self.stats_history = []
-        self.line_empty.set_data([], [])
-        self.line_grass.set_data([], [])
-        self.line_burning.set_data([], [])
-        self.line_burnt.set_data([], [])
-        self.ax2.set_xlim(STATS_AXIS['xlim'])
-        self._update_speed_buttons()
-        self.fig.canvas.draw_idle()
-        self.update_brush_text()
 
     def _reset_simulation_state(self):
         """Resetea la simulación a su estado inicial."""
@@ -516,31 +614,6 @@ class FireSimulationGUI:
             self.ax2.set_xlim(STATS_AXIS['xlim'][0], max(min_width, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
-
-    def _calculate_and_set_wind(self):
-        """
-        Convierte (Ángulo GUI, Velocidad GUI) a (Vector Normalizado, Intensidad 0-1) y actualiza el modelo.
-        """
-        angle_rad = np.deg2rad(self.wind_angle)
-        norm_y = np.cos(angle_rad)
-        norm_x = np.sin(angle_rad)
-        self.model.wind_direction = [norm_y, -norm_x]
-        max_speed = SLIDER_LIMITS["wind_speed"][1]
-        intensity = self.wind_speed / max_speed if max_speed > 0 else 0
-        self.model.wind_intensity = intensity
-
-    def _update_wind_angle(self, val):
-        """Se llama cuando el slider de ángulo cambia."""
-        self.wind_angle = val
-        self._calculate_and_set_wind()
-
-    def _update_wind_speed(self, val):
-        """Se llama cuando el slider de velocidad cambia."""
-        self.wind_speed = val
-        self._calculate_and_set_wind()
-
-    def _update_humidity(self, val):
-        self.model.humidity = val
 
     def show(self):
         """Muestra la interfaz gráfica."""
@@ -592,6 +665,8 @@ class FireSimulationGUI:
                 self.wind_speed = model_intensity * max_speed
                 self._calculate_and_set_wind()
 
+                self.grass_density = self.model.grass_density * 100.0  # El modelo tiene valores 0-1
+
                 self.slider_wind_angle.set_val(self.wind_angle)
                 self.slider_wind_speed.set_val(self.wind_speed)
                 self.slider_humidity.set_val(self.model.humidity)
@@ -606,6 +681,14 @@ class FireSimulationGUI:
                 self.ani = self._create_animation(BASE_INTERVAL_MS)
                 self.ani.event_source.stop()
                 self._update_speed_buttons()
+
+                # Resetear estadísticas del gráfico
+                self.stats_history = []
+                self.line_empty.set_data([], [])
+                self.line_grass.set_data([], [])
+                self.line_burning.set_data([], [])
+                self.line_burnt.set_data([], [])
+                self.ax2.set_xlim(STATS_AXIS['xlim'])
 
                 self.im.set_array(self._build_display_image())
                 self.fig.canvas.draw()

@@ -16,7 +16,7 @@ DEFAULT_SOIL_MOISTURE = 0.5  # Humedad del suelo
 DEFAULT_WIND_DIRECTION = [0, 0]  # [componente_y, componente_x]
 DEFAULT_WIND_INTENSITY = 0.9
 DEFAULT_HUMIDITY = 0.3  # Humedad ambiente
-DEFAULT_GRASS_DENSITY = 0.375  # Humedad ambiente
+DEFAULT_GRASS_DENSITY = 0.375
 
 # Probabilidades base y factores de influencia (para get_transition_matrix)
 # GRASS state transitions
