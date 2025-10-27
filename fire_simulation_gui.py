@@ -340,7 +340,7 @@ class FireSimulationGUI:
             else:
                 self.current_highlight_patch = patches.Rectangle(
                     (c_hover - 0.5, r_hover - 0.5), 1, 1,
-                    linewidth=1.5, edgecolor='yellow', facecolor='none', zorder=10
+                    linewidth=1.5, edgecolor='orange', facecolor='none', zorder=10
                 )
                 self.ax1.add_patch(self.current_highlight_patch)
             self.fig.canvas.draw_idle()
@@ -655,6 +655,8 @@ class FireSimulationGUI:
         if file_path:
             with np.load(file_path) as data:
                 self.model.import_state(data)
+                self.grid_size = self.model.grid_size
+                self.im.set_extent((-0.5, self.grid_size[1] - 0.5, self.grid_size[0] - 0.5, -0.5))
 
                 model_y, model_x = self.model.wind_direction
                 model_intensity = self.model.wind_intensity
