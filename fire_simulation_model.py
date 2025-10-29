@@ -217,6 +217,15 @@ class FireSimulationModel:
             'burnt': burnt_count / total_cells * 100
         }
 
+    def get_burned_mask(self) -> np.ndarray:
+        """
+        Devuelve una máscara binaria de celdas quemadas o en combustión.
+
+        Returns:
+            np.ndarray: array booleano con True donde land es BURNING o BURNT.
+        """
+        return (self.land == BURNING) | (self.land == BURNT)
+
     def apply_brush(self, r_center: int, c_center: int, brush_size: int, brush_type: str, value: float | None = None) -> None:
         """
         Aplica un pincel en la cuadrícula.

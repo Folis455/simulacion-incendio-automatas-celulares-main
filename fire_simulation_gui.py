@@ -10,6 +10,8 @@ from matplotlib.widgets import Slider, Button
 import matplotlib.patches as patches
 import tkinter as tk
 from tkinter import filedialog
+import os
+from datetime import datetime
 
 
 class FireSimulationGUI:
@@ -247,6 +249,11 @@ class FireSimulationGUI:
         ax_button_load = plt.axes([0.75, 0.02, 0.15, 0.035])
         self.button_load = Button(ax_button_load, 'Cargar Config.')
         self.button_load.on_clicked(self._load_button_callback)
+
+       
+        ax_button_snapshot = plt.axes([0.55, 0.06, 0.18, 0.035])
+        self.button_snapshot = Button(ax_button_snapshot, 'Guardar Snapshot')
+        self.button_snapshot.on_clicked(self._snapshot_button_callback)
 
     def _setup_event_handlers(self):
         """Configura los manejadores de eventos."""
@@ -499,6 +506,12 @@ class FireSimulationGUI:
             self.button_load.color = 'lightgoldenrodyellow'
             self.button_load.ax.set_facecolor('lightgoldenrodyellow')
 
+            # Habilitar Snapshot sólo en pausa
+            if hasattr(self, 'button_snapshot'):
+                self.button_snapshot.set_active(True)
+                self.button_snapshot.color = 'lightgoldenrodyellow'
+                self.button_snapshot.ax.set_facecolor('lightgoldenrodyellow')
+
         else:
             # Deshabilitar Reset, Guardar y Cargar
             disabled_color = '0.85'  # Un color gris claro
@@ -514,6 +527,11 @@ class FireSimulationGUI:
             self.button_load.set_active(False)
             self.button_load.color = disabled_color
             self.button_load.ax.set_facecolor(disabled_color)
+
+            if hasattr(self, 'button_snapshot'):
+                self.button_snapshot.set_active(False)
+                self.button_snapshot.color = disabled_color
+                self.button_snapshot.ax.set_facecolor(disabled_color)
 
         self.fig.canvas.draw_idle()
 
@@ -694,4 +712,51 @@ class FireSimulationGUI:
 
                 self.im.set_array(self._build_display_image())
                 self.fig.canvas.draw()
+        root.destroy()
+
+    def _snapshot_button_callback(self, event):
+        if not self.simulation_paused:
+            return
+        self.save_snapshot()
+
+    def save_snapshot(self, base_path: str | None = None):
+        """Guarda imagen de la simulación, máscara quemada y NPZ del estado."""
+        root = tk.Tk()
+        root.withdraw()
+        if base_path is None:
+            suggested = f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            base_path = filedialog.asksaveasfilename(
+                defaultextension=".npz",
+                filetypes=[("NumPy compressed", "*.npz")],
+                initialfile=suggested,
+                title="Guardar snapshot (elige nombre base)"
+            )
+        if not base_path:
+            root.destroy()
+            return
+        base_no_ext, _ = os.path.splitext(base_path)
+
+        view_png = base_no_ext + "_view.png"
+        mask_png = base_no_ext + "_mask.png"
+        state_npz = base_no_ext + ".npz"
+
+        img = self._build_display_image()
+        plt.imsave(view_png, img)
+
+        burned_mask = self.model.get_burned_mask().astype(np.uint8)
+        plt.imsave(mask_png, burned_mask, cmap='gray', vmin=0, vmax=1)
+
+        np.savez_compressed(
+            state_npz,
+            grid_size=np.array(self.model.grid_size),
+            land=self.model.land,
+            dryness_grid=self.model.dryness_grid,
+            water_grid=self.model.water_grid,
+            temperature=self.model.temperature,
+            soil_moisture=self.model.soil_moisture,
+            wind_direction=np.array(self.model.wind_direction),
+            wind_intensity=self.model.wind_intensity,
+            humidity=self.model.humidity,
+            grass_density=self.model.grass_density
+        )
         root.destroy()
