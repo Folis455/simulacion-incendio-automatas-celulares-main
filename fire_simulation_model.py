@@ -282,3 +282,4 @@ class FireSimulationModel:
         self.wind_intensity = float(data["wind_intensity"])
         self.humidity = float(data["humidity"])
         self.grass_density = float(data["grass_density"])
+        self._precalculate_near_water()
