@@ -33,18 +33,19 @@ class FireSimulationModel:
         self.humidity = DEFAULT_HUMIDITY
         self.grass_density = float(min(max(DEFAULT_GRASS_DENSITY, 0.0), 1.0))
         self.near_water_grid = np.zeros(self.grid_size, dtype=bool)
-        self._precalculate_near_water()
+        self.calculate_water_effect()
 
-    def _precalculate_near_water(self) -> None:
+    def calculate_water_effect(self) -> None:
         rows, cols = self.grid_size
-        R = WATER_EFFECT_RADIUS
+
+        print("precalculando...")
 
         for r in range(rows):
             for c in range(cols):
-                r0 = max(0, r - R)
-                r1 = min(rows, r + R + 1)
-                c0 = max(0, c - R)
-                c1 = min(cols, c + R + 1)
+                r0 = max(0, r - WATER_EFFECT_RADIUS)
+                r1 = min(rows, r + WATER_EFFECT_RADIUS + 1)
+                c0 = max(0, c - WATER_EFFECT_RADIUS)
+                c1 = min(cols, c + WATER_EFFECT_RADIUS + 1)
 
                 if np.any(self.water_grid[r0:r1, c0:c1] > 0):
                     self.near_water_grid[r, c] = True
@@ -264,10 +265,8 @@ class FireSimulationModel:
         elif brush_type == 'empty':
             self.land[r_start:r_end, c_start:c_end] = EMPTY
             self.water_grid[r_start:r_end, c_start:c_end] = 0
-            self._precalculate_near_water()
         elif brush_type == 'water':
             self.water_grid[r_start:r_end, c_start:c_end] = 1
-            self._precalculate_near_water()
         elif brush_type == 'dryness' and value is not None:
             self.dryness_grid[r_start:r_end, c_start:c_end] = float(value)
 
@@ -282,4 +281,4 @@ class FireSimulationModel:
         self.wind_intensity = float(data["wind_intensity"])
         self.humidity = float(data["humidity"])
         self.grass_density = float(data["grass_density"])
-        self._precalculate_near_water()
+        self.calculate_water_effect()
