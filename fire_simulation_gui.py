@@ -53,6 +53,7 @@ class FireSimulationGUI:
         for mode in self.painting_modes:
             img = plt.imread(f'./icons/{mode}.png')
             self.brush_icons[mode] = img
+        self.zoom_in_img = plt.imread(f'./icons/zoom-in.png')
 
         # Variables de interacción
         self.current_highlight_patch = None
@@ -67,6 +68,11 @@ class FireSimulationGUI:
         self._setup_controls()
         self._setup_event_handlers()
         self._calculate_and_set_wind()
+
+        self.is_zoomed = False
+        self.ax1_orig_pos = None
+        self.ax2_orig_pos = None
+        self.zoom_button_image = None
 
         # Mostrar texto inicial del pincel
         self.update_brush_text()
@@ -235,6 +241,13 @@ class FireSimulationGUI:
         self.button_play = Button(ax_button_play, 'Play', color=self.inactive_button_color, hovercolor='0.975')
         self.button_turbo = Button(ax_button_turbo, 'Turbo', color=self.inactive_button_color, hovercolor='0.975')
         self.button_reset = Button(ax_button_reset, 'Reset', color=self.inactive_button_color, hovercolor='0.975')
+
+        ax_button_zoom = plt.axes([0.20, 0.02, 0.09, 0.035])
+        self.button_zoom = Button(ax_button_zoom, '', color=self.inactive_button_color, hovercolor='0.975')
+        self.button_zoom.ax.imshow(self.zoom_in_img)
+        self.button_zoom.ax.set_xticks([])
+        self.button_zoom.ax.set_yticks([])
+        self.button_zoom.on_clicked(self._toggle_zoom)
 
         self.button_pause.on_clicked(self._on_pause_click)
         self.button_play.on_clicked(self._on_play_click)
@@ -641,6 +654,46 @@ class FireSimulationGUI:
             self.ax2.set_xlim(STATS_AXIS['xlim'][0], max(min_width, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
+
+    def _toggle_zoom(self, event):
+        """Amplía ax1 para ocultar ax2 y los sliders, o restaura la vista."""
+        if not self.is_zoomed and self.ax1_orig_pos is None:
+            self.ax1_orig_pos = self.ax1.get_position()
+            self.ax2_orig_pos = self.ax2.get_position()
+
+        self.is_zoomed = not self.is_zoomed
+
+        elements_to_toggle = [
+            self.ax2,
+            self.slider_wind_angle.ax, self.slider_wind_speed.ax, self.slider_humidity.ax,
+            self.slider_temperature.ax, self.slider_soil_moisture.ax, self.slider_grass_density.ax,
+            self.button_save.ax, self.button_load.ax, self.button_snapshot.ax,
+        ]
+
+        if self.is_zoomed:
+            # --- MODO AMPLIADO ---
+            for elem in elements_to_toggle:
+                elem.set_visible(False)
+
+            self.ax1.set_title('')
+            self.ax1.set_position([0.01, 0.07, 0.98, 0.86])
+
+            self.button_zoom.color = self.active_button_color
+            self.button_zoom.ax.set_facecolor(self.active_button_color)
+
+        else:
+            # --- MODO NORMAL ---
+            for elem in elements_to_toggle:
+                elem.set_visible(True)
+
+            self.ax1.set_position(self.ax1_orig_pos)
+            self.ax2.set_position(self.ax2_orig_pos)
+            self.ax1.set_title("Simulación de Incendio (Autómata Celular Estocástico)")
+
+            self.button_zoom.color = self.inactive_button_color
+            self.button_zoom.ax.set_facecolor(self.inactive_button_color)
+
+        self.fig.canvas.draw_idle()
 
     def show(self):
         """Muestra la interfaz gráfica."""
