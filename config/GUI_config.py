@@ -11,12 +11,12 @@ STATS_AXIS = dict(
 SLIDER_LIMITS = {
     "wind_angle": (0, 360, 1),
     "wind_speed": (0.0, 15.0, 0.5),
-    "humidity": (0.0, 1.0, 0.5),
+    "humidity": (0.0, 1.0, 0.05),
     "temperature": (10.0, 50.0, 1),
-    "soil_moisture": (0.0, 1.0, 0.5),
+    "soil_moisture": (0.0, 1.0, 0.05),
     "brush_size": (1, 25, 1),
     "brush_dryness": (0, 100, 1),
-    "grass_density": (0, 100, 0.5),
+    "grass_density": (0, 100, 1),
 }
 
 COLORS = {
