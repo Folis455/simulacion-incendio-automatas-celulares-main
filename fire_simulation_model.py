@@ -32,6 +32,25 @@ class FireSimulationModel:
         self.wind_intensity = DEFAULT_WIND_INTENSITY
         self.humidity = DEFAULT_HUMIDITY
         self.grass_density = float(min(max(DEFAULT_GRASS_DENSITY, 0.0), 1.0))
+        self.near_water_grid = np.zeros(self.grid_size, dtype=bool)
+        self.calculate_water_effect()
+
+    def calculate_water_effect(self) -> None:
+        rows, cols = self.grid_size
+
+        print("precalculando...")
+
+        for r in range(rows):
+            for c in range(cols):
+                r0 = max(0, r - WATER_EFFECT_RADIUS)
+                r1 = min(rows, r + WATER_EFFECT_RADIUS + 1)
+                c0 = max(0, c - WATER_EFFECT_RADIUS)
+                c1 = min(cols, c + WATER_EFFECT_RADIUS + 1)
+
+                if np.any(self.water_grid[r0:r1, c0:c1] > 0):
+                    self.near_water_grid[r, c] = True
+                else:
+                    self.near_water_grid[r, c] = False
 
     def get_neighborhood(self, r: int, c: int) -> list[int]:
         """
@@ -159,8 +178,8 @@ class FireSimulationModel:
         new_grid = self.land.copy()
         rows, cols = self.land.shape
 
-        for r in range(rows):
-            for c in range(cols):
+        for r in range(rows):  # Bucle lento
+            for c in range(cols):  # Bucle lento
                 # Tratamiento de agua como EMPTY
                 current_cell_state = EMPTY if self.water_grid[r, c] > 0 else self.land[r, c]
 
@@ -171,12 +190,8 @@ class FireSimulationModel:
                 except Exception:
                     local_dryness = 0.0
 
-                # Humedad del suelo local por agua cercana
-                r0 = max(0, r - WATER_EFFECT_RADIUS)
-                r1 = min(self.grid_size[0], r + WATER_EFFECT_RADIUS + 1)
-                c0 = max(0, c - WATER_EFFECT_RADIUS)
-                c1 = min(self.grid_size[1], c + WATER_EFFECT_RADIUS + 1)
-                near_water = np.any(self.water_grid[r0:r1, c0:c1] > 0)
+                # near_water = np.any(self.water_grid[r0:r1, c0:c1] > 0) # MUY lento
+                near_water = self.near_water_grid[r, c]  # Usando los datos precalculados
                 local_soil_moist = min(self.soil_moisture + (WATER_SOIL_MOISTURE_BONUS if near_water else 0.0), 1.0)
 
                 transition_probs = self.get_transition_matrix(
@@ -266,3 +281,4 @@ class FireSimulationModel:
         self.wind_intensity = float(data["wind_intensity"])
         self.humidity = float(data["humidity"])
         self.grass_density = float(data["grass_density"])
+        self.calculate_water_effect()
