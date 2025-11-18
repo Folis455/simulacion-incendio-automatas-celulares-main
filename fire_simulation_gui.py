@@ -48,10 +48,12 @@ class FireSimulationGUI:
         self.brush_icons = {}
         self.brush_buttons = {}
         self.show_water_overlay = False
+        self.water_or_empty_painted = False
 
         for mode in self.painting_modes:
             img = plt.imread(f'./icons/{mode}.png')
             self.brush_icons[mode] = img
+        self.zoom_in_img = plt.imread(f'./icons/zoom-in.png')
 
         # Variables de interacción
         self.current_highlight_patch = None
@@ -66,6 +68,11 @@ class FireSimulationGUI:
         self._setup_controls()
         self._setup_event_handlers()
         self._calculate_and_set_wind()
+
+        self.is_zoomed = False
+        self.ax1_orig_pos = None
+        self.ax2_orig_pos = None
+        self.zoom_button_image = None
 
         # Mostrar texto inicial del pincel
         self.update_brush_text()
@@ -157,16 +164,16 @@ class FireSimulationGUI:
             self.brush_buttons[mode] = btn
 
         # 2. Botones de Tamaño de Pincel (+/-)
-        ax_brush_minus = plt.axes([0.38, y_pos_top, 0.03, btn_size])
+        ax_brush_minus = plt.axes([0.44, y_pos_top, 0.03, btn_size])
         self.button_brush_minus = Button(ax_brush_minus, '-')
         self.button_brush_minus.on_clicked(self._on_brush_minus_click)
 
-        ax_brush_plus = plt.axes([0.42, y_pos_top, 0.03, btn_size])
+        ax_brush_plus = plt.axes([0.47, y_pos_top, 0.03, btn_size])
         self.button_brush_plus = Button(ax_brush_plus, '+')
         self.button_brush_plus.on_clicked(self._on_brush_plus_click)
 
         # 3. Slider de Sequedad
-        ax_brush_dryness_top = plt.axes([0.60, 0.95, 0.25, 0.025])
+        ax_brush_dryness_top = plt.axes([0.70, 0.95, 0.25, 0.025])
         self.slider_brush_dryness = Slider(
             ax_brush_dryness_top, label='Sequedad Pincel',
             valmin=SLIDER_LIMITS["brush_dryness"][0], valmax=SLIDER_LIMITS["brush_dryness"][1],
@@ -235,6 +242,13 @@ class FireSimulationGUI:
         self.button_turbo = Button(ax_button_turbo, 'Turbo', color=self.inactive_button_color, hovercolor='0.975')
         self.button_reset = Button(ax_button_reset, 'Reset', color=self.inactive_button_color, hovercolor='0.975')
 
+        ax_button_zoom = plt.axes([0.20, 0.02, 0.09, 0.035])
+        self.button_zoom = Button(ax_button_zoom, '', color=self.inactive_button_color, hovercolor='0.975')
+        self.button_zoom.ax.imshow(self.zoom_in_img)
+        self.button_zoom.ax.set_xticks([])
+        self.button_zoom.ax.set_yticks([])
+        self.button_zoom.on_clicked(self._toggle_zoom)
+
         self.button_pause.on_clicked(self._on_pause_click)
         self.button_play.on_clicked(self._on_play_click)
         self.button_turbo.on_clicked(self._on_turbo_click)
@@ -250,7 +264,6 @@ class FireSimulationGUI:
         self.button_load = Button(ax_button_load, 'Cargar Config.')
         self.button_load.on_clicked(self._load_button_callback)
 
-       
         ax_button_snapshot = plt.axes([0.55, 0.06, 0.18, 0.035])
         self.button_snapshot = Button(ax_button_snapshot, 'Guardar Snapshot')
         self.button_snapshot.on_clicked(self._snapshot_button_callback)
@@ -303,10 +316,7 @@ class FireSimulationGUI:
 
     def update_brush_text(self):
         """Actualiza el texto de tamaño del pincel."""
-        status = f"Pincel: {self.brush_size_cells}"
-
-        if self.painting_mode == 'dryness':
-            status += f" | Sequedad: {int(self.brush_dryness_value)}"
+        status = f"Tamaño pincel: {self.brush_size_cells}"
 
         if self.brush_size_label is None:
             self.brush_size_label = self.fig.text(0.30, 0.955, status, va='center')
@@ -398,6 +408,8 @@ class FireSimulationGUI:
 
     def _apply_brush_at(self, r, c):
         """Aplica el pincel en la posición especificada."""
+        if self.painting_mode == 'empty' or self.painting_mode == 'water':
+            self.water_or_empty_painted = True
         if self.painting_mode == 'dryness':
             self.model.apply_brush(r, c, self.brush_size_cells, 'dryness', self.brush_dryness_value)
         else:
@@ -562,6 +574,10 @@ class FireSimulationGUI:
         if self.ani:
             self.ani.event_source.stop()
 
+        if self.water_or_empty_painted:
+            self.model.calculate_water_effect()
+            self.water_or_empty_painted = False
+
         self.ani = self._create_animation(BASE_INTERVAL_MS)
         self.simulation_paused = False
         self.current_speed_mode = 'play'
@@ -571,8 +587,14 @@ class FireSimulationGUI:
         """Maneja el clic en el botón de Turbo."""
         if not self.simulation_paused and self.current_speed_mode == 'turbo':
             return
+
         if self.ani:
             self.ani.event_source.stop()
+
+        if self.water_or_empty_painted:
+            self.model.calculate_water_effect()
+            self.water_or_empty_painted = False
+
         self.ani = self._create_animation(max(10, int(BASE_INTERVAL_MS / 10)))
         self.simulation_paused = False
         self.current_speed_mode = 'turbo'
@@ -632,6 +654,46 @@ class FireSimulationGUI:
             self.ax2.set_xlim(STATS_AXIS['xlim'][0], max(min_width, len(x_data)) + 1)
 
         return [self.im, self.line_empty, self.line_grass, self.line_burning, self.line_burnt]
+
+    def _toggle_zoom(self, event):
+        """Amplía ax1 para ocultar ax2 y los sliders, o restaura la vista."""
+        if not self.is_zoomed and self.ax1_orig_pos is None:
+            self.ax1_orig_pos = self.ax1.get_position()
+            self.ax2_orig_pos = self.ax2.get_position()
+
+        self.is_zoomed = not self.is_zoomed
+
+        elements_to_toggle = [
+            self.ax2,
+            self.slider_wind_angle.ax, self.slider_wind_speed.ax, self.slider_humidity.ax,
+            self.slider_temperature.ax, self.slider_soil_moisture.ax, self.slider_grass_density.ax,
+            self.button_save.ax, self.button_load.ax, self.button_snapshot.ax,
+        ]
+
+        if self.is_zoomed:
+            # --- MODO AMPLIADO ---
+            for elem in elements_to_toggle:
+                elem.set_visible(False)
+
+            self.ax1.set_title('')
+            self.ax1.set_position([0.01, 0.07, 0.98, 0.86])
+
+            self.button_zoom.color = self.active_button_color
+            self.button_zoom.ax.set_facecolor(self.active_button_color)
+
+        else:
+            # --- MODO NORMAL ---
+            for elem in elements_to_toggle:
+                elem.set_visible(True)
+
+            self.ax1.set_position(self.ax1_orig_pos)
+            self.ax2.set_position(self.ax2_orig_pos)
+            self.ax1.set_title("Simulación de Incendio (Autómata Celular Estocástico)")
+
+            self.button_zoom.color = self.inactive_button_color
+            self.button_zoom.ax.set_facecolor(self.inactive_button_color)
+
+        self.fig.canvas.draw_idle()
 
     def show(self):
         """Muestra la interfaz gráfica."""
