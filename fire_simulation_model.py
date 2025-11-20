@@ -94,7 +94,7 @@ def _jit_get_transition_probs(r: int, c: int, land_grid: np.ndarray, rows: int, 
 
 # Agregamos parallel=True y prange para usar todos los núcleos del CPU
 @jit(nopython=True, parallel=True)
-def _jit_update_loop(rows: int, cols: int, land_grid: np.ndarray, water_grid: np.ndarray,
+def _jit_update_step(rows: int, cols: int, land_grid: np.ndarray, water_grid: np.ndarray,
                      dryness_grid: np.ndarray, near_water_grid: np.ndarray,
                      wind_direction_array: np.ndarray, wind_intensity: float, humidity: float,
                      temperature: float, soil_moisture: float, grass_density: float) -> np.ndarray:
@@ -186,7 +186,7 @@ class FireSimulationModel:
         self.calculate_water_effect()
 
         # Se ejecuta el método principal una vez con datos falsos al inicio para que numba compile el código
-        _jit_update_loop(2, 2, np.zeros((2, 2), dtype=np.uint8),
+        _jit_update_step(2, 2, np.zeros((2, 2), dtype=np.uint8),
                          np.zeros((2, 2), dtype=np.uint8), np.zeros((2, 2), dtype=np.float64),
                          np.zeros((2, 2), dtype=bool), self._wind_direction_array,
                          0.5, 0.5, 25.0, 0.5, 0.5)
@@ -208,7 +208,7 @@ class FireSimulationModel:
         if self.dryness_grid.dtype != np.float64:
             self.dryness_grid = self.dryness_grid.astype(np.float64)
 
-        self.land = _jit_update_loop(
+        self.land = _jit_update_step(
             rows, cols,
             self.land, self.water_grid, self.dryness_grid,
             self.near_water_grid,
