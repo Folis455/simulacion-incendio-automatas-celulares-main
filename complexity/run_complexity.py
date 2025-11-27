@@ -1,5 +1,5 @@
 import time
-from fire_simulation_model import FireSimulationModel  # Asume que tu clase está en ese archivo
+from fire_simulation_model import FireSimulationModel
 from config.model_config import DEFAULT_GRID_SIZE
 
 model = FireSimulationModel()

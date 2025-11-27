@@ -130,7 +130,7 @@ class FireSimulationModel:
 
             # Probabilidad de quemarse con efecto de sequedad local
             ignition_prob_from_neighbors = F_G_B_NEIGHBOR * burning_neighbors_count
-            ignition_prob_from_wind = total_wind_factor * wind_intensity * F_G_B_WIND
+            ignition_prob_from_wind = total_wind_factor * (wind_intensity / 2) * F_G_B_WIND
             dryness_scale = 1.0 + (max(0.0, min(100.0, local_dryness)) / 100.0) * DRYNESS_SPREAD_MULTIPLIER
 
             effective_spread_prob = (ignition_prob_from_neighbors + ignition_prob_from_wind + temp_effect_on_spread) \

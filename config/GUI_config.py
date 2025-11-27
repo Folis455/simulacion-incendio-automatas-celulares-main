@@ -10,7 +10,7 @@ STATS_AXIS = dict(
 # Rango sliders -> Valor Minimo, Valor Maximo, Tasa de Cambio
 SLIDER_LIMITS = {
     "wind_angle": (0, 360, 1),
-    "wind_speed": (0.0, 15.0, 0.5),
+    "wind_speed": (0.0, 30.0, 0.5),
     "humidity": (0.0, 1.0, 0.05),
     "temperature": (10.0, 50.0, 1),
     "soil_moisture": (0.0, 1.0, 0.05),
