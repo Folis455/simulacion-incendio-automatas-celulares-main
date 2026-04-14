@@ -26,28 +26,31 @@ La propagación del fuego en el modelo está regida por la interacción compleja
 
 ---
 
-## 💻 Parte 2: Implementación, Interfaz Gráfica y Validación
+## 💻 Parte 2: Implementación, Interfaz Gráfica, Verificación y Validación
 
 Para convertir el modelo matemático en una herramienta accesible, se desarrolló una interfaz interactiva que facilita la carga de variables y la visualización del ecosistema en tiempo real.
 
 ### Interfaz Gráfica de Usuario (GUI)
-La interfaz permite a los usuarios interactuar con la retícula sin necesidad de conocimientos de programación.
+* La interfaz permite a los usuarios interactuar con la retícula sin necesidad de conocimientos de programación.
 * **Configuración de Escenarios:** Parametrización interactiva de variables meteorológicas (velocidad/dirección del viento, temperatura, humedad) y distribución topográfica con herramientas de "pincel" (para dibujar pasto, fuego, agua o niveles de sequedad).
-* **Controles de Ejecución:** Funciones de reproducción, pausa, reinicio y control del reloj del modelo.
-* **Importación/Exportación:** Capacidad de guardar el estado actual de la grilla y los parámetros para retomar simulaciones específicas.
-* **Estadísticas:** Análisis en tiempo real del porcentaje del terreno afectado por el fuego.
+* **Controles de Ejecución:** Funciones de reproducción, pausa, reinicio y turbo para la velocidad del modelo, permitiendo realizar diferentes pruebas de manera cómoda.
+* **Importación/Exportación:** Capacidad de guardar el estado actual de la grilla y los parámetros para retomar simulaciones específicas a futuro.
+* **Estadísticas:** Análisis en tiempo real del porcentaje del terreno afectado por el fuego (celdas quemadas, no quemadas, vacías, etc.).
 
-### Verificación del Modelo
-Se realizaron pruebas de software para garantizar que el modelo computacional hace exactamente lo que el diseño matemático dictamina:
-* Control de contornos y límites espaciales de la matriz para evitar errores de desbordamiento de memoria.
-* Comprobación de la lógica de estados estocástica.
-* Validación de la inyección vectorial del viento en el Autómata Celular, garantizando un sesgo realista y físicamente correcto en el área quemada.
+### Verificación del Modelo (Sanity Checks)
+Se implementaron controles de calidad para garantizar que la lógica matemática del código sea consistente y no viole las leyes del universo de la simulación:
+1.  **Invariantes Lógicas:**
+    * **Extinción en Agua:** El fuego no puede existir en celdas marcadas como agua.
+    * **Transiciones Irreversibles:** Sin regeneración activa, una celda `BURNT` no puede regresar a `GRASS` ni `BURNING`. Solo el pasto puede inflamarse.
+    * **Conservación de Materia:** En ausencia de combustible (`GRASS`), la cantidad de celdas ardiendo debe ser 0 independientemente del clima.
+2.  **Pruebas de Sensibilidad (Stress Testing):**
+    * **Extremos Climáticos:** Validación de que con Humedad=1.0 el fuego se extinga rápidamente, y con Sequedad Máxima/Temperatura 50°C la propagación sea casi instantánea (1 celda por tick).
+    * **Direccionalidad:** Comprobación de que con viento puro al Sur (`[1, 0]`), el frente de fuego se alargue exclusivamente en esa dirección.
+3.  **Math Checks:** Control de errores numéricos derivados del uso de `fastmath` en Numba, asegurando que probabilidades base de 0 no generen igniciones espontáneas por "ruido" numérico.
 
-### Validación del Modelo
-Se contrastaron los resultados del simulador con el comportamiento del fuego en el mundo real:
-* **Morfología del fuego:** Comprobación de que las reglas estocásticas generen patrones de propagación irregulares, fractales y realistas, consistentes con la literatura de ecología del fuego.
-* **Calibración empírica:** Ajuste de las probabilidades base de ignición apoyándose en datos de entornos rurales argentinos y pautas de comportamiento descritas por organismos oficiales (INTA).
-
+### Metodología de Validación
+La validación busca cuantificar la concordancia entre el modelo y el comportamiento del fuego en el mundo real utilizando datos satelitales y métricas de solapamiento.
+FALTA HASTA QUE ESTÉ MÁS HECHO
 ---
 
 ## 📎 Créditos y Agradecimientos
