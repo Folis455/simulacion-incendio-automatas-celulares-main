@@ -1,0 +1,2 @@
+incendio,fecha,lat,lon,area_real_ha,area_gt_ha,area_sim_ha,iou,dice,precision,recall,error_area_pct,hausdorff_celdas
+Leguizamon,07-07-2024,-34.21160,-63.03058,32.0,13.17,32.00,0.1424,0.2493,0.1759,0.4275,142.98,50.92

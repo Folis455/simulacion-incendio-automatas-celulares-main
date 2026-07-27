@@ -25,7 +25,7 @@ class FireSimulationGUI:
         """
         self.grid_size = DEFAULT_GRID_SIZE
         self.model = FireSimulationModel()
-        self.grass_density = self.model.grass_density * 100.0  # El modelo usa valores 0-1
+        self.grass_density = self.model.grass_density * 8.0  # El modelo usa valores 0-1, la interfaz usa 0-8 t/ha
 
         model_y, model_x = self.model.wind_direction
         model_intensity = self.model.wind_intensity
@@ -198,14 +198,14 @@ class FireSimulationGUI:
             valinit=self.wind_angle, valstep=SLIDER_LIMITS["wind_angle"][2]
         )
         self.slider_wind_speed = Slider(
-            ax_wind_speed, label='Velocidad Viento',
+            ax_wind_speed, label='Velocidad Viento (km/h)',
             valmin=SLIDER_LIMITS["wind_speed"][0], valmax=SLIDER_LIMITS["wind_speed"][1],
             valinit=self.wind_speed, valstep=SLIDER_LIMITS["wind_speed"][2]
         )
         self.slider_humidity = Slider(
-            ax_humidity, label='Humedad Aire',
+            ax_humidity, label='Humedad Aire (%)',
             valmin=SLIDER_LIMITS["humidity"][0], valmax=SLIDER_LIMITS["humidity"][1],
-            valinit=self.model.humidity, valstep=SLIDER_LIMITS["humidity"][2]
+            valinit=self.model.humidity * 100.0, valstep=SLIDER_LIMITS["humidity"][2]
         )
         self.slider_temperature = Slider(
             ax_temperature, label='Temperatura (°C)',
@@ -213,12 +213,12 @@ class FireSimulationGUI:
             valinit=self.model.temperature, valstep=SLIDER_LIMITS["temperature"][2]
         )
         self.slider_soil_moisture = Slider(
-            ax_soil_moisture, label='Humedad Suelo',
+            ax_soil_moisture, label='Humedad Suelo (%)',
             valmin=SLIDER_LIMITS["soil_moisture"][0], valmax=SLIDER_LIMITS["soil_moisture"][1],
-            valinit=self.model.soil_moisture, valstep=SLIDER_LIMITS["soil_moisture"][2]
+            valinit=self.model.soil_moisture * 100.0, valstep=SLIDER_LIMITS["soil_moisture"][2]
         )
         self.slider_grass_density = Slider(
-            ax_grass_density, label='Densidad Pasto',
+            ax_grass_density, label='Densidad Comb. (t/ha)',
             valmin=SLIDER_LIMITS["grass_density"][0], valmax=SLIDER_LIMITS["grass_density"][1],
             valinit=self.grass_density, valstep=SLIDER_LIMITS["grass_density"][2]
         )
@@ -439,21 +439,21 @@ class FireSimulationGUI:
         self._calculate_and_set_wind()
 
     def _update_humidity(self, val):
-        self.model.humidity = val
+        self.model.humidity = val / 100.0
 
     def _update_temperature(self, val):
         self.model.temperature = val
 
     def _update_soil_moisture(self, val):
-        self.model.soil_moisture = val
+        self.model.soil_moisture = val / 100.0
 
     def _update_brush_dryness(self, val):
         self.brush_dryness_value = int(val)
         self.update_brush_text()
 
     def _update_grass_density(self, val):
-        self.grass_density = float(val)  # val está en 0-100
-        self.model.grass_density = self.grass_density / 100.0  # Convertir a 0-1 para el modelo
+        self.grass_density = float(val)  # val está en 0-8 t/ha
+        self.model.grass_density = self.grass_density / 8.0  # Convertir a 0-1 para el modelo
 
     def _set_paint_mode(self, mode):
         """Establece el modo de pintura y actualiza la UI."""
@@ -747,13 +747,13 @@ class FireSimulationGUI:
                 self.wind_speed = model_intensity * max_speed
                 self._calculate_and_set_wind()
 
-                self.grass_density = self.model.grass_density * 100.0  # El modelo tiene valores 0-1
+                self.grass_density = self.model.grass_density * 8.0  # El modelo tiene valores 0-1
 
                 self.slider_wind_angle.set_val(self.wind_angle)
                 self.slider_wind_speed.set_val(self.wind_speed)
-                self.slider_humidity.set_val(self.model.humidity)
+                self.slider_humidity.set_val(self.model.humidity * 100.0)
                 self.slider_temperature.set_val(self.model.temperature)
-                self.slider_soil_moisture.set_val(self.model.soil_moisture)
+                self.slider_soil_moisture.set_val(self.model.soil_moisture * 100.0)
                 self.slider_grass_density.set_val(self.grass_density)
 
                 self.simulation_paused = True

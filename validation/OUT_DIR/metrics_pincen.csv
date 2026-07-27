@@ -1,0 +1,2 @@
+incendio,fecha,lat,lon,area_real_ha,area_gt_ha,area_sim_ha,iou,dice,precision,recall,error_area_vs_gt_pct,error_area_vs_gimf_pct,hausdorff_celdas
+Pincen,07-11-2024,-34.73625,-63.95853,62.0,81.72,62.43,0.4002,0.5716,0.6599,0.5042,23.60,0.69,50.00

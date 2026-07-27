@@ -167,8 +167,8 @@ def _jit_calculate_water_effect(water_grid: np.ndarray, radius: int) -> np.ndarr
 
 
 class FireSimulationModel:
-    def __init__(self) -> None:
-        self.grid_size = DEFAULT_GRID_SIZE
+    def __init__(self, grid_size: tuple | None = None) -> None:
+        self.grid_size = grid_size if grid_size is not None else DEFAULT_GRID_SIZE
         self.land = np.random.choice([EMPTY, GRASS], size=self.grid_size, p=[DEFAULT_EMPTY_PROB, DEFAULT_GRASS_PROB])
         self.dryness_grid = np.full(self.grid_size, DEFAULT_GRASS_DRYNESS, dtype=np.float64)
         self.water_grid = np.zeros(self.grid_size, dtype=np.uint8)

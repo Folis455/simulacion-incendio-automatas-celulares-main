@@ -1,11 +1,16 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import time
+
 from fire_simulation_model import FireSimulationModel
 from config.model_config import DEFAULT_GRID_SIZE
+
 
 model = FireSimulationModel()
 model.apply_brush(DEFAULT_GRID_SIZE[0] // 2, DEFAULT_GRID_SIZE[1] // 2, 5, 'fire')
 
-NUM_STEPS = 40
+NUM_STEPS = 300
 
 print(f"Iniciando simulación: {DEFAULT_GRID_SIZE[0]}x{DEFAULT_GRID_SIZE[1]} celdas, {NUM_STEPS} pasos...")
 start_time = time.time()
